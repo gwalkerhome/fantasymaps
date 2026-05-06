@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.1 | the scribe - book processing</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <div class="back-nav" style="margin-bottom: 20px;">
+            <a href="index.html" class="btn secondary">← library</a>
+        </div>
+
+        <h1>the scribe</h1>
+        <p style="text-align: center;">extracting maps and lore from your digital tomes.</p>
+        
+        <section class="upload-section" style="background: rgba(106, 153, 78, 0.1); padding: 25px; border: 2px dashed var(--moss-green); margin-bottom: 30px;">
+            <div class="form-group">
+                <input type="file" id="bookupload" accept=".epub">
+            </div>
+            <button class="btn" id="processbutton">analyze tome</button>
+        </section>
+
+        <div id="statuslog" style="font-family: 'Spectral', serif; font-size: 0.9em; height: 250px; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 15px; border: 1px solid var(--earth-brown); display: none; line-height: 1.6;">
+            </div>
+    </div>
+
+    <script type="module">
+        import { savetolibrary, uploadartifact } from './firebase.js';
+
+        const log = (msg) => {
+            const el = document.getElementById('statuslog');
+            el.style.display = "block";
+            el.innerHTML += `> ${msg}<br>`;
+            el.scrollTop = el.scrollHeight;
+        };
+
+        document.getElementById('processbutton').onclick = async () => {
+            const fileinput = document.getElementById('bookupload');
+            if (!fileinput.files[0]) return alert("please select an epub.");
+            
+            const file = fileinput.files[0];
+            const btn = document.getElementById('processbutton');
+            btn.disabled = true;
+            log(`opening ${file.name}...`);
+            
+            try {
+                const zip = await JSZip.loadAsync(file);
+                
+                // 1. Parse Metadata
+                const containerxml = await zip.file("META-INF/container.xml").async("string");
+                const parser = new DOMParser();
+                const containerdoc = parser.parseFromString(containerxml, "text/xml");
+                const fullpath = containerdoc.getElementsByTagName("rootfile")[0].getAttribute("full-path");
+                const contentxml = await zip.file(fullpath).async("string");
+                const contentdoc = parser.parseFromString(contentxml, "text/xml");
+                
+                const title = contentdoc.getElementsByTagName("dc:title")[0]?.textContent || file.name;
+                const bookid = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                log(`identified: ${title}`);
+
+                // 2. Find Cover Image
+                let coverurl = "";
+                const covermeta = contentdoc.querySelector('meta[name="cover"]');
+                if (covermeta) {
+                    const coverid = covermeta.getAttribute("content");
+                    const coveritem = contentdoc.getElementById(coverid);
+                    if (coveritem) {
+                        const href = coveritem.getAttribute("href");
+                        // resolve path relative to opf file
+                        const basepath = fullpath.substring(0, fullpath.lastIndexOf('/') + 1);
+                        const coverfile = zip.file(basepath + href);
+                        
+                        if (coverfile) {
+                            log("extracting cover art...");
+                            const blob = await coverfile.async("blob");
+                            coverurl = await uploadartifact(`covers/${bookid}_cover.jpg`, blob);
+                            log("cover art secured in the vault.");
+                        }
+                    }
+                }
+
+                // 3. Save to Library
+                await savetolibrary(bookid, {
+                    title: title,
+                    status: "ready",
+                    cover: coverurl,
+                    added: new Date().toISOString()
+                });
+
+                log("scribe's work complete. the tome is cataloged.");
+                btn.disabled = false;
+                alert("tome successfully registered!");
+                
+            } catch (e) {
+                log(`error: ${e.message}`);
+                btn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>
