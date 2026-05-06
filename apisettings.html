@@ -3,246 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.1 | companion - engine laboratory</title>
+    <title>v1.1 | companion - api configuration</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <style>
-        body {
-            overflow: hidden; /* Keep the desk stationary */
-            height: 100vh;
-        }
-
-        #sidebar {
-            width: 240px;
-            background: var(--iron-ink);
-            padding: 30px;
-            border-right: 2px solid var(--earth-brown);
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        #sidebar h2 { color: var(--aged-parchment); margin-bottom: 20px; }
-
-        #test-container {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-
-        #top-bar {
-            padding: 30px 40px;
-            background: rgba(43, 45, 66, 0.9);
-            border-bottom: 3px double var(--earth-brown);
-        }
-
-        #test-input {
-            background: var(--aged-parchment);
-            border: 1px solid var(--earth-brown);
-            color: var(--iron-ink);
-            padding: 15px;
-            font-style: italic;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
-        }
-
-        #split-view {
-            display: flex;
-            flex-grow: 1;
-            overflow: hidden;
-            padding: 20px;
-            gap: 20px;
-            background-image: url('https://www.transparenttextures.com/patterns/dark-wood.png'); /* Subtle wood texture */
-        }
-
-        .scroll-panel {
-            flex: 1;
-            background: var(--aged-parchment);
-            border: 1px solid var(--earth-brown);
-            box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            position: relative;
-        }
-
-        /* Scroll Edges effect */
-        .scroll-panel::before, .scroll-panel::after {
-            content: "";
-            height: 15px;
-            background: var(--earth-brown);
-            width: 100%;
-            display: block;
-        }
-
-        .panel-content {
-            padding: 25px;
-            overflow-y: auto;
-            flex-grow: 1;
-        }
-
-        .panel-header {
-            border-bottom: 1px solid var(--moss-green);
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-        }
-
-        .panel-header h3 { text-align: left; margin: 0; font-size: 1.2em; }
-        
-        .gemini-text { color: var(--deep-forest); }
-        .openai-text { color: var(--earth-brown); }
-
-        .output-box {
-            font-family: 'Spectral', serif;
-            font-size: 1rem;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            color: var(--iron-ink);
-        }
-
-        .status { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--moss-green); }
-    </style>
 </head>
-<body style="flex-direction: row; align-items: stretch; padding: 0;">
+<body>
 
-    <nav id="sidebar">
-        <h2>companion</h2>
-        <a href="index.html" class="btn-stage-1 btn">The Library</a>
-        <a href="apisettings.html" class="btn-stage-1 btn">API Keys</a>
-        <a href="settings.html" class="btn-stage-1 btn secondary">Settings</a>
-    </nav>
-
-    <div id="test-container">
-        <div id="top-bar">
-            <textarea id="test-input" placeholder="Paste a scene here..."></textarea>
-            <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-                <button class="btn" onclick="runExtractionTest()">Consult the Oracles</button>
-            </div>
+    <div class="container">
+        <h1>the arcane engine</h1>
+        <p style="text-align: center; font-style: italic;">Provide the keys to the oracles so they may read your tomes.</p>
+        
+        <div class="form-group">
+            <label for="gemini_key_input">gemini api key</label>
+            <input type="password" id="gemini_key_input" placeholder="Paste your Gemini key here...">
         </div>
 
-        <div id="split-view">
-            <div class="scroll-panel">
-                <div class="panel-content">
-                    <div class="panel-header">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3 class="gemini-text">Gemini Scroll</h3>
-                            <span id="gemini-status" class="status">Idle</span>
-                        </div>
-                        <select id="gemini-model-choice" class="model-select">
-                            <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-                            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-                        </select>
-                    </div>
-                    <div id="gemini-output" class="output-box">The ink has not yet flowed...</div>
-                </div>
-            </div>
+        <div class="form-group">
+            <label for="openai_key_input">openai api key</label>
+            <input type="password" id="openai_key_input" placeholder="Paste your OpenAI key here...">
+        </div>
 
-            <div class="scroll-panel">
-                <div class="panel-content">
-                    <div class="panel-header">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3 class="openai-text">OpenAI Scroll</h3>
-                            <span id="openai-status" class="status">Idle</span>
-                        </div>
-                        <select id="openai-model-choice" class="model-select">
-                            <option value="gpt-4o">gpt-4o</option>
-                            <option value="o1-preview">o1-preview</option>
-                        </select>
-                    </div>
-                    <div id="openai-output" class="output-box">Waiting for the quill...</div>
-                </div>
-            </div>
+        <div style="display: flex; gap: 15px; justify-content: center; margin-top: 30px;">
+            <button class="btn" onclick="saveKeys()">Bind Keys</button>
+            <a href="settings.html" class="btn secondary">Return</a>
+        </div>
+
+        <div class="info-box">
+            <strong>Security Note:</strong> Your keys are etched only into this device's local memory (localStorage). They are never sent to any server other than the AI providers themselves.
         </div>
     </div>
 
     <script>
-        // ... (Same runExtractionTest, callGemini, and callOpenAI scripts as before) ...
-        async function runExtractionTest() {
-            const input = document.getElementById('test-input').value;
-            if (!input) return alert("Please paste some book text to analyze.");
-
-            const prompt = `Analyze this fantasy book excerpt: "${input}". 
-            Return ONLY a valid JSON object:
-            {
-              "current_location": "name of the specific place",
-              "characters_present": ["name1", "name2"],
-              "summary": "15 word summary of the action",
-              "visual_desc": "brief description for an image generator"
-            }`;
-
-            document.getElementById('gemini-output').innerText = "Reading excerpt...";
-            document.getElementById('openai-output').innerText = "Reading excerpt...";
-
-            callGemini(prompt);
-            callOpenAI(prompt);
-        }
-
-        async function callGemini(prompt) {
-            const key = localStorage.getItem('gemini_key');
-            const model = document.getElementById('gemini-model-choice').value;
-            const status = document.getElementById('gemini-status');
-            const output = document.getElementById('gemini-output');
-
-            if (!key) { output.innerText = "Error: Set Gemini Key in API Settings."; return; }
-            status.innerText = "Analyzing...";
-
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                });
-                const data = await response.json();
-                if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-                    output.innerText = data.candidates[0].content.parts[0].text;
-                    status.innerText = "Complete";
-                } else {
-                    output.innerText = "API Error: Check Key/Model";
-                    status.innerText = "Failed";
-                }
-            } catch (err) {
-                output.innerText = "Network Error: " + err.message;
-                status.innerText = "Failed";
+        // Load existing keys if they exist
+        window.onload = function() {
+            if(localStorage.getItem('gemini_key')) {
+                document.getElementById('gemini_key_input').value = localStorage.getItem('gemini_key');
+            }
+            if(localStorage.getItem('openai_key')) {
+                document.getElementById('openai_key_input').value = localStorage.getItem('openai_key');
             }
         }
 
-        async function callOpenAI(prompt) {
-            const key = localStorage.getItem('openai_key');
-            const model = document.getElementById('openai-model-choice').value;
-            const status = document.getElementById('openai-status');
-            const output = document.getElementById('openai-output');
-
-            if (!key) { output.innerText = "Error: Set OpenAI Key in API Settings."; return; }
-            status.innerText = "Analyzing...";
-
-            try {
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${key}`
-                    },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: [{ role: "user", content: prompt }]
-                    })
-                });
-                const data = await response.json();
-                if (data.choices && data.choices[0]) {
-                    output.innerText = data.choices[0].message.content;
-                    status.innerText = "Complete";
-                } else {
-                    output.innerText = "API Error: Check Key/Model";
-                    status.innerText = "Failed";
-                }
-            } catch (err) {
-                output.innerText = "Network Error: " + err.message;
-                status.innerText = "Failed";
-            }
+        function saveKeys() {
+            const gKey = document.getElementById('gemini_key_input').value;
+            const oKey = document.getElementById('openai_key_input').value;
+            
+            localStorage.setItem('gemini_key', gKey);
+            localStorage.setItem('openai_key', oKey);
+            
+            alert('The engine is now primed. Your keys have been saved.');
         }
     </script>
+
 </body>
 </html>
