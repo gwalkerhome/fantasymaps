@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.2 | the scribe - book processing</title>
+    <title>v1.3 | the scribe - book processing</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -23,11 +23,20 @@
             <button class="btn" id="processbutton">analyze tome</button>
         </section>
 
-        <h3>process log</h3>
-        <div id="statuslog" style="font-family: monospace; font-size: 0.8em; height: 150px; overflow-y: auto; background: #fff; padding: 10px; border: 1px solid var(--earth-brown); margin-bottom: 20px; display: none;"></div>
+        <div class="split-view" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>process log</h3>
+                <div id="statuslog" style="font-family: monospace; font-size: 0.8em; height: 120px; overflow-y: auto; background: #fff; padding: 10px; border: 1px solid var(--earth-brown); margin-bottom: 20px;"></div>
 
-        <h3>scribe's mirror (raw ai output)</h3>
-        <textarea id="aimirror" style="width: 100%; height: 300px; font-family: monospace; font-size: 0.85em; padding: 15px; border: 1px solid var(--earth-brown); background: #fdfaf6; color: #333;" readonly placeholder="the ai's thoughts will appear here..."></textarea>
+                <h3>outgoing dispatch (the prompt)</h3>
+                <textarea id="promptmirror" style="width: 100%; height: 350px; font-family: monospace; font-size: 0.85em; padding: 15px; border: 1px solid var(--moss-green); background: #f0f4f0; color: #2d3a2d;" readonly placeholder="the message being sent to the ai..."></textarea>
+            </div>
+
+            <div>
+                <h3>scribe's mirror (raw ai output)</h3>
+                <textarea id="aimirror" style="width: 100%; height: 505px; font-family: monospace; font-size: 0.85em; padding: 15px; border: 1px solid var(--earth-brown); background: #fdfaf6; color: #333;" readonly placeholder="the ai's thoughts will appear here..."></textarea>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="cartographer.js"></script>
