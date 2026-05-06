@@ -1,26 +1,10 @@
-// v1.9 battlemaster.js
+// v1.6 battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const MASTER_VERSION = "v1.9";
+const VERSION = "v1.6";
+const log = (msg) => { document.getElementById('battlelog').innerText = msg; };
 
-// Ensure UI is ready before updating badges
-const initUI = () => {
-    const mV = document.getElementById('master-v');
-    const pV = document.getElementById('prompt-v');
-    if (mV) mV.innerText = MASTER_VERSION;
-    if (pV) pV.innerText = CARTOGRAPHER_PROMPTS.version || "unknown";
-};
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initUI);
-} else {
-    initUI();
-}
-
-const log = (msg) => { 
-    const el = document.getElementById('battlelog');
-    if (el) el.innerText = msg; 
-};
+document.getElementById('version-badge').innerText = VERSION;
 
 function cleanResponse(text) {
     if (typeof text !== 'string') return JSON.stringify(text);
@@ -52,63 +36,74 @@ async function callOpenAI(prompt, key) {
 }
 
 async function runGeminiStation(prompt, key) {
-    const s2 = document.getElementById('g_status_2');
-    const s3 = document.getElementById('g_status_3');
-    s2.innerText = "THINKING...";
+    const status2 = document.getElementById('g_status_2');
+    const status3 = document.getElementById('g_status_3');
+    status2.innerText = "THINKING...";
     try {
         const res = await callGemini(prompt, key);
         document.getElementById('g_output').value = res;
-        s2.innerText = "COMPLETE";
+        status2.innerText = "COMPLETE";
         const parsed = JSON.parse(res);
         document.getElementById('g_parsed').value = JSON.stringify(parsed.ledger, null, 2);
-        s3.innerText = "PARSED";
+        status3.innerText = "PARSED";
     } catch (err) {
-        s2.innerText = "FAILED: " + err.message;
-        s3.innerText = "STALLED";
+        status2.innerText = "FAILED: " + err.message;
+        status3.innerText = "STALLED";
     }
 }
 
 async function runOpenAIStation(prompt, key) {
-    const s2 = document.getElementById('o_status_2');
-    const s3 = document.getElementById('o_status_3');
-    s2.innerText = "THINKING...";
+    const status2 = document.getElementById('o_status_2');
+    const status3 = document.getElementById('o_status_3');
+    status2.innerText = "THINKING...";
     try {
         const res = await callOpenAI(prompt, key);
         document.getElementById('o_output').value = res;
-        s2.innerText = "COMPLETE";
+        status2.innerText = "COMPLETE";
         const parsed = JSON.parse(res);
         document.getElementById('o_parsed').value = JSON.stringify(parsed.ledger, null, 2);
-        s3.innerText = "PARSED";
+        status3.innerText = "PARSED";
     } catch (err) {
-        s2.innerText = "FAILED: " + err.message;
-        s3.innerText = "STALLED";
+        status2.innerText = "FAILED: " + err.message;
+        status3.innerText = "STALLED";
     }
 }
 
-const startBtn = document.getElementById('startbattle');
-if (startBtn) {
-    startBtn.onclick = async () => {
-        const file = document.getElementById('battleupload').files[0];
-        if (!file) return;
+async function runTrial(imagefiles) {
+    const gKey = localStorage.getItem('gemini_key');
+    const oKey = localStorage.getItem('openai_key');
+    
+    const testChapters = ["htp01", "ch01", "ch45", "ch80", "bm01"];
+    const imgObjects = imagefiles.map(f => ({ name: f.split('/').pop() }));
+    const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(testChapters, imgObjects);
 
-        const gKey = localStorage.getItem('gemini_key');
-        const oKey = localStorage.getItem('openai_key');
-        
-        log("Unzipping parchment...");
-        const zip = await JSZip.loadAsync(file);
-        const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
-        const imgObjects = imagefiles.map(f => ({ name: f.split('/').pop() }));
+    document.getElementById('g_prompt').value = prompt;
+    document.getElementById('o_prompt').value = prompt;
 
-        const testChapters = ["htp01", "ch01", "ch45", "ch80", "bm01"];
-        const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(testChapters, imgObjects);
-
-        document.getElementById('g_prompt').value = prompt;
-        document.getElementById('o_prompt').value = prompt;
-        document.getElementById('g_status_1').innerText = "READY";
-        document.getElementById('o_status_1').innerText = "READY";
-
-        log("The scholars are reviewing the maps...");
-        runGeminiStation(prompt, gKey);
-        runOpenAIStation(prompt, oKey);
-    };
+    // Run independently so one failure doesn't stop the other
+    runGeminiStation(prompt, gKey);
+    runOpenAIStation(prompt, oKey);
 }
+
+document.getElementById('startbattle').onclick = async () => {
+    const file = document.getElementById('battleupload').files[0];
+    if (!file) return;
+    const zip = await JSZip.loadAsync(file);
+    const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
+    sessionStorage.setItem('last_book_images', JSON.stringify(imagefiles));
+    document.getElementById('clearbook').style.display = "inline-block";
+    runTrial(imagefiles);
+};
+
+window.onload = () => {
+    const remembered = sessionStorage.getItem('last_book_images');
+    if (remembered) {
+        document.getElementById('clearbook').style.display = "inline-block";
+        runTrial(JSON.parse(remembered));
+    }
+};
+
+document.getElementById('clearbook').onclick = () => {
+    sessionStorage.removeItem('last_book_images');
+    location.reload();
+};
