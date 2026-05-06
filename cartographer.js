@@ -1,4 +1,4 @@
-// cartographer.js - The Silent Mapping Engine v1.0
+// cartographer.js - v1.1
 import { savetolibrary, uploadartifact } from './firebase.js';
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
@@ -11,24 +11,42 @@ const log = (msg) => {
     }
 };
 
+const mirror = (content) => {
+    document.getElementById('aimirror').value = content;
+};
+
+async function callgemini(prompt, apikey) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apikey}`;
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { response_mime_type: "application/json" }
+        })
+    });
+
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text;
+}
+
 async function processbook() {
     const fileinput = document.getElementById('bookupload');
     const apikey = localStorage.getItem('gemini_api_key');
 
-    if (!fileinput.files[0]) return alert("Please select a tome (.epub).");
-    if (!apikey) return alert("The Arcane Engine requires an API Key. Check Settings.");
+    if (!fileinput.files[0]) return alert("Select a tome first.");
+    if (!apikey) return alert("API Key missing in Settings.");
 
     const file = fileinput.files[0];
     const btn = document.getElementById('processbutton');
-    
     btn.disabled = true;
-    log(`Initializing Cartographer for: ${file.name}`);
 
     try {
         const zip = await JSZip.loadAsync(file);
-        
-        // 1. Extract Spine and TOC
-        log("Unfolding the map of the book (Metadata)...");
+        log("Unzipping parchment...");
+
+        // 1. Extract Info
         const containerxml = await zip.file("META-INF/container.xml").async("string");
         const parser = new DOMParser();
         const rootPath = parser.parseFromString(containerxml, "text/xml").getElementsByTagName("rootfile")[0].getAttribute("full-path");
@@ -38,52 +56,36 @@ async function processbook() {
         const title = contentdoc.getElementsByTagName("dc:title")[0]?.textContent || file.name;
         const bookid = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
         
-        // Get Chapters (manifest items referenced in the spine)
-        const spine = Array.from(contentdoc.getElementsByTagName("itemref"))
-            .map(ref => ref.getAttribute("idref"));
-        log(`Identified ${spine.length} segments to analyze.`);
-
-        // 2. Harvest Images
-        log("Gathering illustrations and scrolls...");
+        const spine = Array.from(contentdoc.getElementsByTagName("itemref")).map(ref => ref.getAttribute("idref"));
         const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
-        const artifactledger = [];
 
-        // 3. Silent Upload & Preparation
-        // We upload the first few as a proof of concept for the ledger
-        for (const path of imagefiles.slice(0, 15)) {
-            const imgfile = zip.file(path);
-            const blob = await imgfile.async("blob");
-            const filename = path.split('/').pop();
-            
-            log(`Securing artifact: ${filename}`);
-            const url = await uploadartifact(`library/${bookid}/artifacts/${filename}`, blob);
-            
-            artifactledger.push({
-                name: filename,
-                url: url,
-                type: "unknown" // This will be updated by Gemini in the next pass
-            });
-        }
+        // 2. Prepare AI Binding
+        log("Consulting the Cartographer's prompt...");
+        const imgList = imagefiles.map(f => ({ name: f.split('/').pop() }));
+        const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(spine, imgList);
 
-        // 4. Update the Vault
+        log("Sending request to Gemini...");
+        const aiResponse = await callgemini(prompt, apikey);
+        mirror(aiResponse); // Show the raw result in the Mirror!
+
+        // 3. Parse and Save
+        const ledgerData = JSON.parse(aiResponse);
+        
         await savetolibrary(bookid, {
             title: title,
-            bookid: bookid,
-            status: "analyzed",
+            status: "ready",
+            ledger: ledgerData.ledger,
             segments: spine,
-            artifacts: artifactledger,
-            last_processed: new Date().toISOString()
+            last_updated: new Date().toISOString()
         });
 
-        log("Cartography complete. The ledger is synced to the vault.");
-        alert("The tome is ready for the Map Room.");
+        log("Ledger sealed. The tome is ready.");
         btn.disabled = false;
 
     } catch (error) {
-        log(`Cartography Error: ${error.message}`);
+        log(`Error: ${error.message}`);
         btn.disabled = false;
     }
 }
 
-// Attach to the button
 document.getElementById('processbutton').addEventListener('click', processbook);
