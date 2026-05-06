@@ -1,11 +1,7 @@
-// v2.0 | battlemaster.js
+// v2.3 | battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = "v2.0";
-const log = (msg) => { 
-    const el = document.getElementById('battlelog');
-    if (el) el.innerText = msg; 
-};
+const VERSION = "v2.3";
 
 const updateBadge = () => {
     const badge = document.getElementById('version-badge');
@@ -47,86 +43,48 @@ async function callOpenAI(prompt, key) {
     return cleanResponse(data.choices?.[0]?.message?.content || "");
 }
 
-async function runGeminiStation(prompt, key) {
-    const status2 = document.getElementById('g_status_2');
-    const status3 = document.getElementById('g_status_3');
-    if (status2) status2.innerText = "THINKING...";
-    try {
-        const res = await callGemini(prompt, key);
-        document.getElementById('g_output').value = res;
-        if (status2) status2.innerText = "COMPLETE";
-        const parsed = JSON.parse(res);
-        document.getElementById('g_parsed').value = JSON.stringify(parsed.ledger, null, 2);
-        if (status3) status3.innerText = "PARSED";
-    } catch (err) {
-        if (status2) status2.innerText = "FAILED: " + err.message;
-        if (status3) status3.innerText = "STALLED";
-    }
-}
-
-async function runOpenAIStation(prompt, key) {
-    const status2 = document.getElementById('o_status_2');
-    const status3 = document.getElementById('o_status_3');
-    if (status2) status2.innerText = "THINKING...";
-    try {
-        const res = await callOpenAI(prompt, key);
-        document.getElementById('o_output').value = res;
-        if (status2) status2.innerText = "COMPLETE";
-        const parsed = JSON.parse(res);
-        document.getElementById('o_parsed').value = JSON.stringify(parsed.ledger, null, 2);
-        if (status3) status3.innerText = "PARSED";
-    } catch (err) {
-        if (status2) status2.innerText = "FAILED: " + err.message;
-        if (status3) status3.innerText = "STALLED";
-    }
-}
-
-async function runTrial(imagefiles) {
+async function runTrial(imagefiles, chapterData) {
     const gKey = localStorage.getItem('gemini_key');
     const oKey = localStorage.getItem('openai_key');
-    const testChapters = ["htp01", "ch01", "ch45", "ch80", "bm01"];
+    const imgList = imagefiles.map(f => ({ name: f.split('/').pop() }));
     
-    // Clean the filenames for the prompt
-    const imgObjects = imagefiles.map(f => ({ name: f.split('/').pop() }));
+    // Pass the rich chapter data (name + snippet) to the prompt builder
+    const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(chapterData, imgList);
     
-    const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(testChapters, imgObjects);
+    if (document.getElementById('g_prompt')) document.getElementById('g_prompt').value = prompt;
+    if (document.getElementById('o_prompt')) document.getElementById('o_prompt').value = prompt;
 
-    const gPromptEl = document.getElementById('g_prompt');
-    const oPromptEl = document.getElementById('o_prompt');
-    if (gPromptEl) gPromptEl.value = prompt;
-    if (oPromptEl) oPromptEl.value = prompt;
-
-    runGeminiStation(prompt, gKey);
-    runOpenAIStation(prompt, oKey);
-}
-
-const startBtn = document.getElementById('startbattle');
-if (startBtn) {
-    startBtn.onclick = async () => {
-        const file = document.getElementById('battleupload').files[0];
-        if (!file) return;
-        const zip = await JSZip.loadAsync(file);
-        const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
-        sessionStorage.setItem('last_book_images', JSON.stringify(imagefiles));
-        const clearBtn = document.getElementById('clearbook');
-        if (clearBtn) clearBtn.style.display = "inline-block";
-        runTrial(imagefiles);
+    // Run both
+    const runG = async () => {
+        const res = await callGemini(prompt, gKey);
+        document.getElementById('g_output').value = res;
+        document.getElementById('g_parsed').value = JSON.stringify(JSON.parse(res).ledger, null, 2);
     };
-}
-
-const clearBtn = document.getElementById('clearbook');
-if (clearBtn) {
-    clearBtn.onclick = () => {
-        sessionStorage.removeItem('last_book_images');
-        location.reload();
+    const runO = async () => {
+        const res = await callOpenAI(prompt, oKey);
+        document.getElementById('o_output').value = res;
+        document.getElementById('o_parsed').value = JSON.stringify(JSON.parse(res).ledger, null, 2);
     };
+
+    runG();
+    runO();
 }
 
-window.onload = () => {
-    const remembered = sessionStorage.getItem('last_book_images');
-    if (remembered) {
-        const clearBtn = document.getElementById('clearbook');
-        if (clearBtn) clearBtn.style.display = "inline-block";
-        runTrial(JSON.parse(remembered));
-    }
+document.getElementById('startbattle').onclick = async () => {
+    const file = document.getElementById('battleupload').files[0];
+    if (!file) return;
+    
+    const zip = await JSZip.loadAsync(file);
+    const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
+    
+    // Find chapter files (xhtml/html) and grab a snippet of text
+    const chapterFiles = Object.keys(zip.files).filter(f => f.match(/\.(xhtml|html)$/i)).slice(0, 5);
+    const chapterData = await Promise.all(chapterFiles.map(async (name) => {
+        const text = await zip.file(name).async("string");
+        // Strip HTML tags and grab first 1000 chars
+        const cleanText = text.replace(/<[^>]*>/g, ' ').substring(0, 1000);
+        return { id: name.split('/').pop(), snippet: cleanText };
+    }));
+
+    runTrial(imagefiles, chapterData);
 };
