@@ -1,33 +1,31 @@
-// prompts.js - The Scribe's Instructions v1.1
+// prompts.js - The Scribe's Instructions v1.2
 
 export const CARTOGRAPHER_PROMPTS = {
     buildBindingPrompt: (chapters, imageList) => {
         return `
-            You are a Master Cartographer and Librarian. 
-            Your goal is to match book chapters to the most specific map available.
+            You are a Master Cartographer for a High Fantasy library. 
             
-            CHAPTER LIST:
+            CHAPTERS TO MAP:
             ${chapters.join(", ")}
             
             AVAILABLE IMAGES:
             ${imageList.map(img => img.name).join(", ")}
             
-            LOGIC RULES:
-            1. IDENTIFY MAPS: Look for files containing 'map', 'chart', 'plate', or 'area'.
-            2. PRIMARY MATCH: If a map filename contains a chapter name or number (e.g., 'map_ch01.jpg' for 'ch01'), it is a MANDATORY match.
-            3. SECONDARY MATCH: If no specific map exists for a chapter, use the general world map or 'chart.jpg'.
-            4. FORMAT: You must return ONLY valid JSON.
+            TASK:
+            1. Analyze the list of images and identify those that are MAPS (look for "map", "chart", "area", "plate").
+            2. For each chapter, scan the map names for a match. 
+               - Example: If a chapter is "ch01" and there is a "map_01.jpg", that is a match.
+               - Example: If a chapter is "htp01" and there is a "world_map.jpg", that is a match.
+            3. CRITICAL: Do NOT bind chapters to images that are obviously not maps (e.g., 'cover.jpg', 'logo.jpg', 'portrait.jpg', 'icon.png').
+            4. If no specific map is relevant for a chapter, bind it to the "World Map" or "chart.jpg".
             
-            SPOILER RULE: No plot summaries.
+            SPOILER RULE: Do not include plot summaries. 
             
-            REQUIRED JSON FORMAT:
+            OUTPUT FORMAT:
+            You must output ONLY a JSON object in this exact format:
             {
               "ledger": [
-                {
-                  "chapter": "Chapter ID", 
-                  "map_file": "filename.jpg",
-                  "reasoning": "Briefly why this map was chosen"
-                }
+                {"chapter": "Chapter ID", "map_file": "filename.jpg"}
               ]
             }
         `;
