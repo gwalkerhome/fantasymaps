@@ -1,4 +1,4 @@
-// v1.3 cartographer.js
+// v1.4 cartographer.js
 import { savetolibrary, uploadartifact } from './firebase.js';
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
@@ -16,7 +16,8 @@ const mirror = (content) => {
 };
 
 async function callgemini(prompt, apikey) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apikey}`;
+    // Switching to v1 endpoint for stability
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apikey}`;
     
     const response = await fetch(url, {
         method: 'POST',
@@ -26,19 +27,28 @@ async function callgemini(prompt, apikey) {
             generationConfig: { 
                 response_mime_type: "application/json",
                 temperature: 0.1 
-            }
+            },
+            // Adding safety overrides to prevent silent blocks
+            safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+            ]
         })
     });
 
     const data = await response.json();
     
-    // Defensive check for the Gemini response structure
     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
         return data.candidates[0].content.parts[0].text;
     } else {
-        // If it fails, show the full error in the mirror so we can debug
-        mirror(data);
-        throw new Error("Gemini returned an unexpected format. Check the Mirror.");
+        // This is the diagnostic dump
+        mirror({
+            error: "API structure mismatch or safety block.",
+            full_response: data
+        });
+        throw new Error("Gemini returned an empty response. See Mirror for details.");
     }
 }
 
@@ -57,7 +67,6 @@ async function processbook() {
         const zip = await JSZip.loadAsync(file);
         log("Unzipping parchment...");
 
-        // 1. Extract Info
         const containerxml = await zip.file("META-INF/container.xml").async("string");
         const parser = new DOMParser();
         const rootPath = parser.parseFromString(containerxml, "text/xml").getElementsByTagName("rootfile")[0].getAttribute("full-path");
@@ -70,7 +79,6 @@ async function processbook() {
         const spine = Array.from(contentdoc.getElementsByTagName("itemref")).map(ref => ref.getAttribute("idref"));
         const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
 
-        // 2. Prepare AI Binding
         log("Consulting the Cartographer's prompt...");
         const imgList = imagefiles.map(f => ({ name: f.split('/').pop() }));
         const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(spine, imgList);
@@ -79,7 +87,6 @@ async function processbook() {
         const aiResponse = await callgemini(prompt, apikey);
         mirror(aiResponse);
 
-        // 3. Parse and Save
         const ledgerData = JSON.parse(aiResponse);
         
         await savetolibrary(bookid, {
