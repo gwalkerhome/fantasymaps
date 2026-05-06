@@ -1,28 +1,32 @@
-// prompts.js - The Scribe's Instructions v1.4
+// prompts.js - The Scribe's Instructions v1.5
 
 export const CARTOGRAPHER_PROMPTS = {
     buildBindingPrompt: (chapters, imageList) => {
-        const chapterContext = chapters.map(c => `ID: ${c.id}\nCONTENT: ${c.snippet}...`).join("\n\n---\n\n");
+        // Format the chapters with their text snippets for the AI
+        const context = chapters.map(c => `[FILE: ${c.name}]\nCONTENT: ${c.text}...`).join("\n\n---\n\n");
+        const images = imageList.map(img => img.name).join(", ");
         
         return `
-            You are a Master Cartographer. 
-            I need to bind book chapters to the correct map images based on their content.
+            You are a Master Cartographer for a High Fantasy library.
             
-            CHAPTER DATA:
-            ${chapterContext}
+            CHAPTER CONTENT SNIPPETS:
+            ${context}
             
             AVAILABLE MAP IMAGES:
-            ${imageList.map(img => img.name).join(", ")}
+            ${images}
             
             TASK:
-            1. Read the chapter snippets to understand the geography or location mentioned.
-            2. Match each chapter ID to the map filename that best represents that location.
-            3. If no specific map is mentioned in the content, use the general world map or 'chart.jpg'.
+            1. Analyze the content of each chapter for geographical names, locations, or descriptions.
+            2. Match each chapter to the map image that best fits that location.
+            3. If a specific match is found (e.g., 'map_coast.jpg' for a coastal chapter), use it.
+            4. If no specific map is relevant based on the text, use 'chart.jpg' or a general map.
             
-            FORMAT:
+            SPOILER RULE: Do not include plot summaries. 
+            
+            OUTPUT FORMAT (JSON ONLY):
             {
               "ledger": [
-                {"chapter": "Chapter ID", "map_file": "filename.jpg"}
+                {"chapter": "filename.xhtml", "map_file": "image.jpg"}
               ]
             }
         `;
