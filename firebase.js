@@ -1,6 +1,7 @@
-// firebase.js - library postmaster
+// firebase.js - library postmaster v1.1
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseconfig = {
   apiKey: "AIzaSyB6gyW7XQSE9ROpQEgvMd9hGUOM3cC6-q0",
@@ -11,11 +12,11 @@ const firebaseconfig = {
   appId: "1:922857136375:web:e01e043aae36d6be98b3f2"
 };
 
-// initialize firebase
 const app = initializeApp(firebaseconfig);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
-// utility to save data to a specific book
+// utility to save data to firestore
 export async function savetolibrary(bookid, data) {
     try {
         await setDoc(doc(db, "library", bookid), data, { merge: true });
@@ -25,7 +26,19 @@ export async function savetolibrary(bookid, data) {
     }
 }
 
-// utility to fetch all books in the collection
+// utility to upload a file (like a cover) to storage
+export async function uploadartifact(path, file) {
+    try {
+        const storageref = ref(storage, path);
+        await uploadBytes(storageref, file);
+        const url = await getDownloadURL(storageref);
+        return url;
+    } catch (e) {
+        console.error("upload error: ", e);
+        return null;
+    }
+}
+
 export async function fetchlibrary() {
     try {
         const querysnapshot = await getDocs(collection(db, "library"));
@@ -36,4 +49,4 @@ export async function fetchlibrary() {
     }
 }
 
-export { db };
+export { db, storage };
