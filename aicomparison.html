@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.3 | ai cartographer arena</title>
+    <title>v1.4 | ai cartographer arena</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        /* Modernized split view using columns */
         .arena-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -68,7 +67,7 @@
             <a href="settings.html" class="btn secondary">← settings</a>
         </div>
 
-        <h1 style="text-align: center;">the arena <span id="version-badge">v1.3</span></h1>
+        <h1 style="text-align: center;">the arena <span id="version-badge">v1.4</span></h1>
 
         <section class="upload-section" style="text-align: center; margin-bottom: 20px;">
             <input type="file" id="battleupload" accept=".epub">
@@ -121,6 +120,8 @@
         </div>
     </div>
 
-    <script type="module" src="battlemaster.js"></script>
+    <script type="module">
+        import `./battlemaster.js?v=${new Date().getTime()}`;
+    </script>
 </body>
 </html>
