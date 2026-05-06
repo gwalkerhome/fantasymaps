@@ -1,30 +1,33 @@
-// prompts.js - The Scribe's Instructions v1.0
+// prompts.js - The Scribe's Instructions v1.1
 
 export const CARTOGRAPHER_PROMPTS = {
-    // This function creates the prompt that asks Gemini to match images to chapters
     buildBindingPrompt: (chapters, imageList) => {
         return `
-            You are a Master Cartographer for a High Fantasy library. 
-            I have a book called "The Way of Kings".
+            You are a Master Cartographer and Librarian. 
+            Your goal is to match book chapters to the most specific map available.
             
-            CHAPTERS FOUND:
+            CHAPTER LIST:
             ${chapters.join(", ")}
             
-            IMAGES EXTRACTED:
+            AVAILABLE IMAGES:
             ${imageList.map(img => img.name).join(", ")}
             
-            TASK:
-            1. Analyze the chapter titles and the image filenames.
-            2. Identify which images are MAPS (not character sketches or icons).
-            3. Bind each chapter to the most relevant map.
-            4. If no specific map is relevant, bind it to the "World Map".
+            LOGIC RULES:
+            1. IDENTIFY MAPS: Look for files containing 'map', 'chart', 'plate', or 'area'.
+            2. PRIMARY MATCH: If a map filename contains a chapter name or number (e.g., 'map_ch01.jpg' for 'ch01'), it is a MANDATORY match.
+            3. SECONDARY MATCH: If no specific map exists for a chapter, use the general world map or 'chart.jpg'.
+            4. FORMAT: You must return ONLY valid JSON.
             
-            SPOILER RULE: Do not include plot summaries. Only output a JSON mapping.
+            SPOILER RULE: No plot summaries.
             
-            FORMAT:
+            REQUIRED JSON FORMAT:
             {
               "ledger": [
-                {"chapter": "Chapter ID", "map_file": "filename.jpg"}
+                {
+                  "chapter": "Chapter ID", 
+                  "map_file": "filename.jpg",
+                  "reasoning": "Briefly why this map was chosen"
+                }
               ]
             }
         `;
