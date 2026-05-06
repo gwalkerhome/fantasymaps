@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.1 | high fantasy companion - library</title>
+    <title>v1.2 | high fantasy companion - library</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -20,19 +20,13 @@
             <div class="form-group">
                 <input type="file" id="bookupload" accept=".epub,.pdf">
             </div>
-            <button class="btn" onclick="alert('the engine is being calibrated...')">process book</button>
+            <button class="btn" id="testbutton">strike the spark (test)</button>
         </section>
 
         <section class="library-section">
             <h3>my collection</h3>
             <ul class="settings-list" id="librarylist">
-                <li class="settings-item" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong style="font-family: 'Cinzel', serif;">the way of kings</strong><br>
-                        <span style="font-size: 0.8em; color: var(--earth-brown);">status: ready for adventure</span>
-                    </div>
-                    <a href="map.html" class="btn">open map</a>
-                </li>
+                <li class="settings-item">consulting the shelves...</li>
             </ul>
         </section>
 
@@ -41,5 +35,44 @@
         </div>
     </div>
 
+    <script type="module">
+        import { fetchlibrary, savetolibrary } from './firebase.js';
+
+        // function to refresh the display
+        async function refreshlibrary() {
+            const list = document.getElementById('librarylist');
+            const books = await fetchlibrary();
+            
+            if (books.length === 0) {
+                list.innerHTML = '<li class="settings-item">the shelves are currently bare.</li>';
+                return;
+            }
+
+            list.innerHTML = books.map(book => `
+                <li class="settings-item" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="font-family: 'Cinzel', serif;">${book.title || book.id}</strong><br>
+                        <span style="font-size: 0.8em; color: var(--earth-brown);">status: ${book.status || 'archived'}</span>
+                    </div>
+                    <a href="map.html?id=${book.id}" class="btn">open map</a>
+                </li>
+            `).join('');
+        }
+
+        // test function to put a book in
+        document.getElementById('testbutton').onclick = async () => {
+            const testid = "way_of_kings";
+            const testdata = {
+                title: "the way of kings",
+                status: "ready for adventure",
+                author: "brandon sanderson"
+            };
+            await savetolibrary(testid, testdata);
+            refreshlibrary(); // update the list immediately
+        };
+
+        // load library on start
+        window.onload = refreshlibrary;
+    </script>
 </body>
 </html>
