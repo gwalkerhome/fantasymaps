@@ -1,4 +1,4 @@
-// cartographer.js - v1.1
+// v1.2 cartographer.js
 import { savetolibrary, uploadartifact } from './firebase.js';
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
@@ -33,9 +33,8 @@ async function callgemini(prompt, apikey) {
 
 async function processbook() {
     const fileinput = document.getElementById('bookupload');
-    // cartographer.js - v1.2
-// (Inside processbook function)
-const apikey = localStorage.getItem('gemini_key'); 
+    // Corrected to match apisettings.html key name
+    const apikey = localStorage.getItem('gemini_key');
 
     if (!fileinput.files[0]) return alert("Select a tome first.");
     if (!apikey) return alert("API Key missing in Settings.");
