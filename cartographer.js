@@ -1,5 +1,6 @@
 // cartographer.js - The Silent Mapping Engine v1.0
 import { savetolibrary, uploadartifact } from './firebase.js';
+import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
 const log = (msg) => {
     const el = document.getElementById('statuslog');
