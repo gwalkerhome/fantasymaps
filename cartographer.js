@@ -1,4 +1,4 @@
-// v1.4 cartographer.js
+// v1.5 cartographer.js
 import { savetolibrary, uploadartifact } from './firebase.js';
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
@@ -11,14 +11,17 @@ const log = (msg) => {
     }
 };
 
-const mirror = (content) => {
-    document.getElementById('aimirror').value = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+const mirror = (id, content) => {
+    const el = document.getElementById(id);
+    if (el) el.value = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
 };
 
 async function callgemini(prompt, apikey) {
-    // Switching to v1 endpoint for stability
     const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apikey}`;
     
+    // Show what we are sending!
+    mirror('promptmirror', prompt);
+
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,14 +30,7 @@ async function callgemini(prompt, apikey) {
             generationConfig: { 
                 response_mime_type: "application/json",
                 temperature: 0.1 
-            },
-            // Adding safety overrides to prevent silent blocks
-            safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-            ]
+            }
         })
     });
 
@@ -43,12 +39,8 @@ async function callgemini(prompt, apikey) {
     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
         return data.candidates[0].content.parts[0].text;
     } else {
-        // This is the diagnostic dump
-        mirror({
-            error: "API structure mismatch or safety block.",
-            full_response: data
-        });
-        throw new Error("Gemini returned an empty response. See Mirror for details.");
+        mirror('aimirror', data);
+        throw new Error("Gemini returned an empty response. Check Mirror.");
     }
 }
 
@@ -57,7 +49,7 @@ async function processbook() {
     const apikey = localStorage.getItem('gemini_key');
 
     if (!fileinput.files[0]) return alert("Select a tome first.");
-    if (!apikey) return alert("API Key missing in Settings.");
+    if (!apikey) return alert("API Key missing.");
 
     const file = fileinput.files[0];
     const btn = document.getElementById('processbutton');
@@ -85,7 +77,7 @@ async function processbook() {
 
         log("Sending request to Gemini...");
         const aiResponse = await callgemini(prompt, apikey);
-        mirror(aiResponse);
+        mirror('aimirror', aiResponse);
 
         const ledgerData = JSON.parse(aiResponse);
         
