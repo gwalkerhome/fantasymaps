@@ -3,34 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.6 | ai cartographer arena</title>
+    <title>v1.4 | ai cartographer arena</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        .arena-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .ai-factory-line { display: flex; flex-direction: column; gap: 15px; }
-        .factory-station { background: rgba(255, 255, 255, 0.4); border: 2px solid var(--earth-brown); padding: 20px; display: flex; flex-direction: column; }
+        .arena-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .ai-factory-line {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .factory-station {
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid var(--earth-brown);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
         .gemini-border { border-color: var(--moss-green); }
         .openai-border { border-color: #74aa9c; }
-        .output-box { width: 100%; height: 250px; font-family: monospace; font-size: 0.8em; margin-top: 10px; padding: 10px; background: #fff; border: 1px solid #ccc; overflow-y: auto; white-space: pre-wrap; }
+        
+        .output-box {
+            width: 100%;
+            height: 250px;
+            font-family: monospace;
+            font-size: 0.8em;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
         .small-output { height: 120px; font-size: 0.75em; }
-        .stats { font-size: 0.7em; text-transform: uppercase; margin-bottom: 5px; font-weight: bold; }
-        .version-row { text-align: center; margin-bottom: 20px; }
-        .badge { font-size: 0.6em; background: var(--earth-brown); color: #fff; padding: 4px 10px; border-radius: 10px; margin: 0 5px; display: inline-block; }
+        
+        .stats {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        #version-badge {
+            font-size: 0.6em;
+            background: var(--earth-brown);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container" style="max-width: 1400px;">
-        <div class="back-nav"><a href="settings.html" class="btn secondary">← settings</a></div>
-        <h1 style="text-align: center;">the arena</h1>
-        <div class="version-row">
-            <span class="badge">engine: <span id="master-v">loading...</span></span>
+        <div class="back-nav">
+            <a href="settings.html" class="btn secondary">← settings</a>
         </div>
+
+        <h1 style="text-align: center;">the arena <span id="version-badge">v1.4</span></h1>
+
         <section class="upload-section" style="text-align: center; margin-bottom: 20px;">
             <input type="file" id="battleupload" accept=".epub">
             <button class="btn" id="startbattle">commence comparison</button>
+            <button class="btn secondary" id="clearbook" style="margin-left:10px; display:none;">clear tome</button>
         </section>
-        <div id="battlelog" style="text-align: center; font-family: 'Spectral'; font-style: italic; color: var(--earth-brown); margin-bottom: 10px;">Select a book to begin the logic trial...</div>
+
+        <div id="battlelog" style="text-align: center; font-family: 'Spectral'; font-style: italic; color: var(--earth-brown); margin-bottom: 10px;">
+            Select a book to begin the logic trial...
+        </div>
+
         <div class="arena-grid">
             <div class="ai-factory-line">
                 <div class="factory-station gemini-border">
@@ -50,6 +98,7 @@
                     <textarea id="g_parsed" class="output-box small-output" readonly></textarea>
                 </div>
             </div>
+
             <div class="ai-factory-line">
                 <div class="factory-station openai-border">
                     <div class="stats" style="color: #74aa9c);">Engine: GPT-4o-mini</div>
@@ -70,6 +119,9 @@
             </div>
         </div>
     </div>
-    <script src="battlemaster.js"></script>
+
+    <script type="module">
+        import `./battlemaster.js?v=${new Date().getTime()}`;
+    </script>
 </body>
 </html>
