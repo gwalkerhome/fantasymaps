@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.0 | ai comparison arena</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        .arena-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .ai-column {
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid var(--earth-brown);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .gemini-border { border-color: var(--moss-green); }
+        .openai-border { border-color: #74aa9c; }
+        
+        .output-box {
+            width: 100%;
+            height: 400px;
+            font-family: monospace;
+            font-size: 0.8em;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .stats {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="back-nav">
+            <a href="apisettings.html" class="btn secondary">← settings</a>
+        </div>
+
+        <h1 style="text-align: center;">the arena: gemini vs openai</h1>
+
+        <section class="upload-section" style="text-align: center; margin-bottom: 20px;">
+            <input type="file" id="battleupload" accept=".epub">
+            <button class="btn" id="startbattle">commence comparison</button>
+        </section>
+
+        <div id="battlelog" style="text-align: center; font-family: 'Spectral'; font-style: italic; color: var(--earth-brown); margin-bottom: 10px;">
+            Select a book to begin the trial...
+        </div>
+
+        <div class="arena-grid">
+            <div class="ai-column gemini-border">
+                <div class="stats" style="color: var(--moss-green);">Engine: Gemini 2.5-Flash</div>
+                <div id="g_status">Waiting...</div>
+                <div id="g_output" class="output-box"></div>
+            </div>
+
+            <div class="ai-column openai-border">
+                <div class="stats" style="color: #74aa9c;">Engine: GPT-4o-mini</div>
+                <div id="o_status">Waiting...</div>
+                <div id="o_output" class="output-box"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="battlemaster.js"></script>
+</body>
+</html>
