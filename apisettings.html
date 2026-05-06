@@ -3,158 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.7 | companion - api configuration</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <title>v1.1 | arcane settings</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        body {
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .container {
-            max-width: 1000px;
-            height: 85vh;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-
-        .back-nav {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-        }
-
-        .split-engines {
-            display: flex;
-            gap: 20px;
-            flex-grow: 1;
-            overflow: hidden;
-            margin-top: 20px;
-        }
-
-        .engine-card {
-            flex: 1;
-            background: rgba(255, 255, 255, 0.4);
-            border: 1px solid var(--earth-brown);
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .model-scroll {
-            flex-grow: 1;
-            overflow-y: auto;
-            background: rgba(255, 255, 255, 0.6);
-            border: 1px solid var(--moss-green);
-            padding: 10px;
-            margin-top: 15px;
-            font-family: 'Spectral', serif;
-        }
-
-        .model-entry {
-            padding: 6px 0;
-            border-bottom: 1px solid rgba(106, 153, 78, 0.2);
-            font-size: 0.9em;
-            color: var(--iron-ink);
-        }
-
-        .status-indicator {
-            font-size: 0.7em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-    </style>
 </head>
 <body>
-
     <div class="container">
-        <div class="back-nav">
-            <a href="index.html" class="btn secondary" style="padding: 8px 15px;">← Library</a>
-        </div>
-
-        <h1>the arcane engine</h1>
+        <div class="back-nav"><a href="index.html" class="btn secondary">← library</a></div>
+        <h1>arcane settings</h1>
         
-        <div class="split-engines">
-            <div class="engine-card">
-                <h3 style="color: var(--deep-forest); margin-top: 0;">Gemini</h3>
-                <div id="g_status" class="status-indicator">Checking...</div>
-                <input type="password" id="g_input" placeholder="Enter Gemini Key...">
-                <button class="btn" onclick="saveG()">Bind Key</button>
-                <div class="model-scroll" id="g_list"></div>
+        <section class="settings-card">
+            <h3>gemini api gateway</h3>
+            <div class="form-group">
+                <label>api key</label>
+                <input type="password" id="apikey" placeholder="enter your gemini key...">
             </div>
+            <button class="btn" id="savekey">bind key to browser</button>
+            <button class="btn secondary" id="testkey">scan for available models</button>
+        </section>
 
-            <div class="engine-card">
-                <h3 style="color: var(--earth-brown); margin-top: 0;">OpenAI</h3>
-                <div id="o_status" class="status-indicator">Checking...</div>
-                <input type="password" id="o_input" placeholder="Enter OpenAI Key...">
-                <button class="btn" onclick="saveO()">Bind Key</button>
-                <div class="model-scroll" id="o_list"></div>
-            </div>
-        </div>
+        <section class="settings-card">
+            <h3>available models</h3>
+            <ul id="modellist" class="settings-list">
+                <li class="settings-item">no models detected.</li>
+            </ul>
+        </section>
     </div>
 
     <script>
-        window.onload = function() {
-            const g = localStorage.getItem('gemini_key');
-            const o = localStorage.getItem('openai_key');
-            if(g) { document.getElementById('g_input').value = g; fetchG(g); }
-            if(o) { document.getElementById('o_input').value = o; fetchO(o); }
+        const keyinput = document.getElementById('apikey');
+        const list = document.getElementById('modellist');
+
+        // load existing key
+        keyinput.value = localStorage.getItem('gemini_api_key') || '';
+
+        document.getElementById('savekey').onclick = () => {
+            localStorage.setItem('gemini_api_key', keyinput.value);
+            alert("key bound to local storage.");
         };
 
-        function saveG() {
-            const val = document.getElementById('g_input').value;
-            localStorage.setItem('gemini_key', val);
-            fetchG(val);
-        }
-
-        function saveO() {
-            const val = document.getElementById('o_input').value;
-            localStorage.setItem('openai_key', val);
-            fetchO(val);
-        }
-
-        async function fetchG(key) {
-            const out = document.getElementById('g_list');
-            const stat = document.getElementById('g_status');
-            stat.innerText = "Consulting...";
+        document.getElementById('testkey').onclick = async () => {
+            const key = keyinput.value;
+            if (!key) return alert("enter a key first.");
+            
+            list.innerHTML = '<li class="settings-item">scanning...</li>';
+            
             try {
-                // Stable 2026 endpoint
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${key}`);
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
                 const data = await res.json();
-                if(data.models) {
-                    out.innerHTML = data.models.map(m => `<div class="model-entry">${m.name.split('/')[1]}</div>`).join('');
-                    stat.innerText = "Active";
-                    stat.style.color = "var(--deep-forest)";
-                } else { stat.innerText = "Check Key"; stat.style.color = "var(--gold-leaf)"; }
-            } catch(e) { stat.innerText = "No Connection"; }
-        }
-
-        async function fetchO(key) {
-            const out = document.getElementById('o_list');
-            const stat = document.getElementById('o_status');
-            stat.innerText = "Consulting...";
-            try {
-                const res = await fetch('https://api.openai.com/v1/models', {
-                    headers: { 'Authorization': `Bearer ${key}` }
-                });
-                const data = await res.json();
-                if(data.data) {
-                    out.innerHTML = data.data.map(m => `<div class="model-entry">${m.id}</div>`).join('');
-                    stat.innerText = "Active";
-                    stat.style.color = "var(--deep-forest)";
-                } else { stat.innerText = "Check Key"; stat.style.color = "var(--gold-leaf)"; }
-            } catch(e) { stat.innerText = "No Connection"; }
-        }
+                
+                if (data.models) {
+                    // ALL models shown, no filters.
+                    list.innerHTML = data.models.map(m => `
+                        <li class="settings-item">
+                            <strong>${m.displayName}</strong><br>
+                            <span style="font-size:0.7em;">${m.name}</span>
+                        </li>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<li class="settings-item">no models found. check your key permissions.</li>';
+                }
+            } catch (e) {
+                list.innerHTML = `<li class="settings-item">error: ${e.message}</li>`;
+            }
+        };
     </script>
 </body>
 </html>
