@@ -1,4 +1,4 @@
-// v1.2 cartographer.js
+// v1.3 cartographer.js
 import { savetolibrary, uploadartifact } from './firebase.js';
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
@@ -12,7 +12,7 @@ const log = (msg) => {
 };
 
 const mirror = (content) => {
-    document.getElementById('aimirror').value = content;
+    document.getElementById('aimirror').value = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
 };
 
 async function callgemini(prompt, apikey) {
@@ -23,17 +23,27 @@ async function callgemini(prompt, apikey) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { response_mime_type: "application/json" }
+            generationConfig: { 
+                response_mime_type: "application/json",
+                temperature: 0.1 
+            }
         })
     });
 
     const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
+    
+    // Defensive check for the Gemini response structure
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+    } else {
+        // If it fails, show the full error in the mirror so we can debug
+        mirror(data);
+        throw new Error("Gemini returned an unexpected format. Check the Mirror.");
+    }
 }
 
 async function processbook() {
     const fileinput = document.getElementById('bookupload');
-    // Corrected to match apisettings.html key name
     const apikey = localStorage.getItem('gemini_key');
 
     if (!fileinput.files[0]) return alert("Select a tome first.");
@@ -67,7 +77,7 @@ async function processbook() {
 
         log("Sending request to Gemini...");
         const aiResponse = await callgemini(prompt, apikey);
-        mirror(aiResponse); // Show the raw result in the Mirror!
+        mirror(aiResponse);
 
         // 3. Parse and Save
         const ledgerData = JSON.parse(aiResponse);
