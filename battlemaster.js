@@ -1,10 +1,23 @@
-// v1.6 battlemaster.js
+// v1.7 | battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = "v1.6";
-const log = (msg) => { document.getElementById('battlelog').innerText = msg; };
+const VERSION = "v1.7";
+const log = (msg) => { 
+    const el = document.getElementById('battlelog');
+    if (el) el.innerText = msg; 
+};
 
-document.getElementById('version-badge').innerText = VERSION;
+// Ensure the UI is updated only when the element is ready
+const updateBadge = () => {
+    const badge = document.getElementById('version-badge');
+    if (badge) badge.innerText = VERSION;
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', updateBadge);
+} else {
+    updateBadge();
+}
 
 function cleanResponse(text) {
     if (typeof text !== 'string') return JSON.stringify(text);
@@ -38,72 +51,80 @@ async function callOpenAI(prompt, key) {
 async function runGeminiStation(prompt, key) {
     const status2 = document.getElementById('g_status_2');
     const status3 = document.getElementById('g_status_3');
-    status2.innerText = "THINKING...";
+    if (status2) status2.innerText = "THINKING...";
     try {
         const res = await callGemini(prompt, key);
         document.getElementById('g_output').value = res;
-        status2.innerText = "COMPLETE";
+        if (status2) status2.innerText = "COMPLETE";
         const parsed = JSON.parse(res);
         document.getElementById('g_parsed').value = JSON.stringify(parsed.ledger, null, 2);
-        status3.innerText = "PARSED";
+        if (status3) status3.innerText = "PARSED";
     } catch (err) {
-        status2.innerText = "FAILED: " + err.message;
-        status3.innerText = "STALLED";
+        if (status2) status2.innerText = "FAILED: " + err.message;
+        if (status3) status3.innerText = "STALLED";
     }
 }
 
 async function runOpenAIStation(prompt, key) {
     const status2 = document.getElementById('o_status_2');
     const status3 = document.getElementById('o_status_3');
-    status2.innerText = "THINKING...";
+    if (status2) status2.innerText = "THINKING...";
     try {
         const res = await callOpenAI(prompt, key);
         document.getElementById('o_output').value = res;
-        status2.innerText = "COMPLETE";
+        if (status2) status2.innerText = "COMPLETE";
         const parsed = JSON.parse(res);
         document.getElementById('o_parsed').value = JSON.stringify(parsed.ledger, null, 2);
-        status3.innerText = "PARSED";
+        if (status3) status3.innerText = "PARSED";
     } catch (err) {
-        status2.innerText = "FAILED: " + err.message;
-        status3.innerText = "STALLED";
+        if (status2) status2.innerText = "FAILED: " + err.message;
+        if (status3) status3.innerText = "STALLED";
     }
 }
 
 async function runTrial(imagefiles) {
     const gKey = localStorage.getItem('gemini_key');
     const oKey = localStorage.getItem('openai_key');
-    
     const testChapters = ["htp01", "ch01", "ch45", "ch80", "bm01"];
     const imgObjects = imagefiles.map(f => ({ name: f.split('/').pop() }));
     const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(testChapters, imgObjects);
 
-    document.getElementById('g_prompt').value = prompt;
-    document.getElementById('o_prompt').value = prompt;
+    const gPromptEl = document.getElementById('g_prompt');
+    const oPromptEl = document.getElementById('o_prompt');
+    if (gPromptEl) gPromptEl.value = prompt;
+    if (oPromptEl) oPromptEl.value = prompt;
 
-    // Run independently so one failure doesn't stop the other
     runGeminiStation(prompt, gKey);
     runOpenAIStation(prompt, oKey);
 }
 
-document.getElementById('startbattle').onclick = async () => {
-    const file = document.getElementById('battleupload').files[0];
-    if (!file) return;
-    const zip = await JSZip.loadAsync(file);
-    const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
-    sessionStorage.setItem('last_book_images', JSON.stringify(imagefiles));
-    document.getElementById('clearbook').style.display = "inline-block";
-    runTrial(imagefiles);
-};
+const startBtn = document.getElementById('startbattle');
+if (startBtn) {
+    startBtn.onclick = async () => {
+        const file = document.getElementById('battleupload').files[0];
+        if (!file) return;
+        const zip = await JSZip.loadAsync(file);
+        const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
+        sessionStorage.setItem('last_book_images', JSON.stringify(imagefiles));
+        const clearBtn = document.getElementById('clearbook');
+        if (clearBtn) clearBtn.style.display = "inline-block";
+        runTrial(imagefiles);
+    };
+}
+
+const clearBtn = document.getElementById('clearbook');
+if (clearBtn) {
+    clearBtn.onclick = () => {
+        sessionStorage.removeItem('last_book_images');
+        location.reload();
+    };
+}
 
 window.onload = () => {
     const remembered = sessionStorage.getItem('last_book_images');
     if (remembered) {
-        document.getElementById('clearbook').style.display = "inline-block";
+        const clearBtn = document.getElementById('clearbook');
+        if (clearBtn) clearBtn.style.display = "inline-block";
         runTrial(JSON.parse(remembered));
     }
-};
-
-document.getElementById('clearbook').onclick = () => {
-    sessionStorage.removeItem('last_book_images');
-    location.reload();
 };
