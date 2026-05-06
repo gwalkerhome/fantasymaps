@@ -3,17 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.1 | companion - api configuration</title>
+    <title>v1.2 | companion - api configuration</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <style>
+        .model-list-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .model-column {
+            flex: 1;
+            background: rgba(56, 102, 65, 0.05);
+            border: 1px solid var(--moss-green);
+            padding: 15px;
+        }
+        .model-column h4 {
+            font-family: 'Cinzel', serif;
+            font-size: 0.9em;
+            margin-top: 0;
+            border-bottom: 1px solid var(--moss-green);
+            padding-bottom: 5px;
+        }
+        .model-item {
+            font-size: 0.85em;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(106, 153, 78, 0.2);
+            color: var(--earth-brown);
+        }
+        .status-pill {
+            font-size: 0.7em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: var(--moss-green);
+            color: white;
+            float: right;
+        }
+    </style>
 </head>
 <body>
 
     <div class="container">
         <h1>the arcane engine</h1>
-        <p style="text-align: center; font-style: italic;">Provide the keys to the oracles so they may read your tomes.</p>
+        <p style="text-align: center; font-style: italic;">Bind your keys to discover available oracles.</p>
         
         <div class="form-group">
             <label for="gemini_key_input">gemini api key</label>
@@ -26,34 +60,92 @@
         </div>
 
         <div style="display: flex; gap: 15px; justify-content: center; margin-top: 30px;">
-            <button class="btn" onclick="saveKeys()">Bind Keys</button>
+            <button class="btn" onclick="saveAndRefresh()">Bind & Discover</button>
             <a href="settings.html" class="btn secondary">Return</a>
         </div>
 
+        <div class="model-list-container">
+            <div class="model-column">
+                <h4>Gemini Models</h4>
+                <div id="gemini-models-list"><p class="model-item">Keys not bound...</p></div>
+            </div>
+            <div class="model-column">
+                <h4>OpenAI Models</h4>
+                <div id="openai-models-list"><p class="model-item">Keys not bound...</p></div>
+            </div>
+        </div>
+
         <div class="info-box">
-            <strong>Security Note:</strong> Your keys are etched only into this device's local memory (localStorage). They are never sent to any server other than the AI providers themselves.
+            <strong>Scholar's Note:</strong> Binding keys will trigger a discovery ritual. If successful, you will see a list of models available to your specific account.
         </div>
     </div>
 
     <script>
-        // Load existing keys if they exist
         window.onload = function() {
-            if(localStorage.getItem('gemini_key')) {
-                document.getElementById('gemini_key_input').value = localStorage.getItem('gemini_key');
+            const gKey = localStorage.getItem('gemini_key');
+            const oKey = localStorage.getItem('openai_key');
+            if(gKey) {
+                document.getElementById('gemini_key_input').value = gKey;
+                fetchGeminiModels(gKey);
             }
-            if(localStorage.getItem('openai_key')) {
-                document.getElementById('openai_key_input').value = localStorage.getItem('openai_key');
+            if(oKey) {
+                document.getElementById('openai_key_input').value = oKey;
+                fetchOpenAIModels(oKey);
             }
         }
 
-        function saveKeys() {
+        async function saveAndRefresh() {
             const gKey = document.getElementById('gemini_key_input').value;
             const oKey = document.getElementById('openai_key_input').value;
             
             localStorage.setItem('gemini_key', gKey);
             localStorage.setItem('openai_key', oKey);
             
-            alert('The engine is now primed. Your keys have been saved.');
+            if(gKey) await fetchGeminiModels(gKey);
+            if(oKey) await fetchOpenAIModels(oKey);
+            
+            alert('Ritual complete. Models updated.');
+        }
+
+        async function fetchGeminiModels(key) {
+            const listDiv = document.getElementById('gemini-models-list');
+            listDiv.innerHTML = '<p class="model-item">Consulting...</p>';
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+                const data = await response.json();
+                if(data.models) {
+                    listDiv.innerHTML = data.models
+                        .filter(m => m.supportedActions.includes('generateContent'))
+                        .map(m => `<div class="model-item">${m.name.split('/')[1]} <span class="status-pill">Active</span></div>`)
+                        .join('');
+                } else {
+                    listDiv.innerHTML = '<p class="model-item" style="color:red">Access Denied</p>';
+                }
+            } catch (e) {
+                listDiv.innerHTML = '<p class="model-item" style="color:red">Connection Failed</p>';
+            }
+        }
+
+        async function fetchOpenAIModels(key) {
+            const listDiv = document.getElementById('openai-models-list');
+            listDiv.innerHTML = '<p class="model-item">Consulting...</p>';
+            try {
+                const response = await fetch('https://api.openai.com/v1/models', {
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                const data = await response.json();
+                if(data.data) {
+                    listDiv.innerHTML = data.data
+                        .filter(m => m.id.includes('gpt') || m.id.includes('o1'))
+                        .slice(0, 8) // Limit to top 8 for readability
+                        .map(m => `<div class="model-item">${m.id} <span class="status-pill">Active</span></div>`)
+                        .join('');
+                } else {
+                    listDiv.innerHTML = '<p class="model-item" style="color:red">Access Denied</p>';
+                }
+            } catch (e) {
+                listDiv.innerHTML = '<p class="model-item" style="color:red">Connection Failed</p>';
+            }
         }
     </script>
 
