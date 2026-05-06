@@ -3,105 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.0 - fantasy library hub</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f4f1ea;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .container {
-            max-width: 800px;
-            width: 100%;
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        h1 {
-            color: #2c3e50;
-            border-bottom: 2px solid #2c3e50;
-            padding-bottom: 10px;
-        }
-
-        .upload-section {
-            background: #ebe7df;
-            padding: 20px;
-            border-radius: 5px;
-            margin-bottom: 30px;
-            border: 2px dashed #95a5a6;
-        }
-
-        .book-list {
-            list-style: none;
-            padding: 0;
-        }
-
-        .book-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .book-item:last-child {
-            border-bottom: none;
-        }
-
-        .btn {
-            background-color: #2c3e50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-        }
-
-        .btn:hover {
-            background-color: #34495e;
-        }
-
-        .status-tag {
-            font-size: 0.8em;
-            padding: 4px 8px;
-            border-radius: 12px;
-            background: #d5dbdb;
-        }
-    </style>
+    <title>v1.1 | high fantasy companion - library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div class="container">
         <h1>high fantasy companion</h1>
         
-        <section class="upload-section">
-            <h3>upload new ebook</h3>
+        <section class="upload-section" style="background: rgba(106, 153, 78, 0.1); padding: 25px; border: 2px dashed var(--moss-green); margin-bottom: 30px;">
+            <h3>upload new tome</h3>
             <p>select an epub or pdf file for the ai to analyze characters and locations.</p>
-            <input type="file" id="bookupload" accept=".epub,.pdf">
-            <button class="btn" onclick="alert('upload logic to be connected')">process book</button>
+            <div class="form-group">
+                <input type="file" id="bookupload" accept=".epub,.pdf">
+            </div>
+            <button class="btn" onclick="alert('the engine is being calibrated...')">process book</button>
         </section>
 
         <section class="library-section">
-            <h3>my library</h3>
-            <ul class="book-list" id="librarylist">
-                <li class="book-item">
+            <h3>my collection</h3>
+            <ul class="settings-list" id="librarylist">
+                <li class="settings-item" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <strong>example: the way of kings</strong><br>
-                        <span class="status-tag">ready</span>
+                        <strong style="font-family: 'Cinzel', serif;">the way of kings</strong><br>
+                        <span style="font-size: 0.8em; color: var(--earth-brown);">status: ready for adventure</span>
                     </div>
                     <a href="map.html" class="btn">open map</a>
                 </li>
             </ul>
         </section>
+
+        <div style="margin-top: 40px; text-align: center;">
+            <a href="settings.html" class="btn secondary">settings & tools</a>
+        </div>
     </div>
 
 </body>
