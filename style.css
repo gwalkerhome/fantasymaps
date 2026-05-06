@@ -1,0 +1,135 @@
+/* v1.1 style.css - The Scholar's Study Theme */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap');
+
+:root {
+    --aged-parchment: #f2e8cf;
+    --deep-forest: #386641;
+    --earth-brown: #6a4f4b;
+    --iron-ink: #2b2d42;
+    --moss-green: #6a994e;
+    --gold-leaf: #bc4749; /* Used for accents/alerts */
+    --border-scroll: #a7c957;
+}
+
+body {
+    font-family: 'Spectral', serif;
+    background-color: #2b2d42; /* Dark void behind the "desk" */
+    background-image: radial-gradient(#386641 0.5px, transparent 0.5px);
+    background-size: 30px 30px;
+    color: var(--iron-ink);
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 900px;
+    width: 95%;
+    background: var(--aged-parchment);
+    padding: 40px;
+    border-radius: 2px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 100px rgba(106, 79, 75, 0.1);
+    border: 1px solid var(--earth-brown);
+    position: relative;
+}
+
+/* Decorative Header */
+h1, h2, h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--deep-forest);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+h1 {
+    border-bottom: 2px double var(--earth-brown);
+    padding-bottom: 15px;
+    margin-bottom: 30px;
+}
+
+/* Form Elements */
+.form-group {
+    margin-bottom: 25px;
+}
+
+label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 700;
+    color: var(--earth-brown);
+    text-transform: uppercase;
+    font-size: 0.9em;
+}
+
+input[type="password"], 
+input[type="text"], 
+textarea {
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--moss-green);
+    border-radius: 0;
+    box-sizing: border-box;
+    font-family: 'Spectral', serif;
+    font-size: 1.1em;
+    color: var(--iron-ink);
+}
+
+/* Buttons as Wax Seals or Bound Leather */
+.btn {
+    background-color: var(--deep-forest);
+    color: var(--aged-parchment);
+    padding: 12px 25px;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    font-family: 'Cinzel', serif;
+    transition: all 0.3s ease;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+}
+
+.btn.secondary {
+    background-color: var(--earth-brown);
+}
+
+.btn:hover {
+    background-color: var(--moss-green);
+    transform: translateY(-2px);
+}
+
+/* Lists and Links */
+.settings-list {
+    list-style: none;
+    padding: 0;
+}
+
+.settings-item {
+    background: rgba(106, 153, 78, 0.1);
+    padding: 20px;
+    border: 1px solid var(--moss-green);
+    margin-bottom: 15px;
+    transition: background 0.3s;
+}
+
+.settings-item:hover {
+    background: rgba(106, 153, 78, 0.2);
+}
+
+.settings-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.info-box {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: rgba(188, 71, 73, 0.1);
+    border-left: 4px solid var(--gold-leaf);
+    font-style: italic;
+}
