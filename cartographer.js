@@ -33,7 +33,9 @@ async function callgemini(prompt, apikey) {
 
 async function processbook() {
     const fileinput = document.getElementById('bookupload');
-    const apikey = localStorage.getItem('gemini_api_key');
+    // cartographer.js - v1.2
+// (Inside processbook function)
+const apikey = localStorage.getItem('gemini_key'); 
 
     if (!fileinput.files[0]) return alert("Select a tome first.");
     if (!apikey) return alert("API Key missing in Settings.");
