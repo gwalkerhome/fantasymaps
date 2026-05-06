@@ -3,182 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.0 | high fantasy companion - engine test</title>
+    <title>v1.1 | companion - engine laboratory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
     <style>
-        :root {
-            --bg-color: #0f172a;
-            --sidebar-bg: #020617;
-            --card-bg: #1e293b;
-            --accent-gemini: #38bdf8;
-            --accent-openai: #10a37f;
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
-            --border: #334155;
-        }
-
         body {
-            margin: 0;
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text);
-            display: flex;
+            overflow: hidden; /* Keep the desk stationary */
             height: 100vh;
-            overflow: hidden;
         }
 
         #sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
-            padding: 24px;
-            border-right: 1px solid var(--border);
+            width: 240px;
+            background: var(--iron-ink);
+            padding: 30px;
+            border-right: 2px solid var(--earth-brown);
             flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
         }
 
-        .btn-stage-1 {
-            background: var(--card-bg);
-            color: var(--text);
-            border: 1px solid var(--border);
-            padding: 12px 16px;
-            border-radius: 10px;
-            cursor: pointer;
-            width: 100%;
-            text-align: left;
-            margin-bottom: 10px;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: block;
-        }
-
-        .btn-stage-1:hover { opacity: 0.8; transform: translateX(4px); }
+        #sidebar h2 { color: var(--aged-parchment); margin-bottom: 20px; }
 
         #test-container {
             flex-grow: 1;
             display: flex;
             flex-direction: column;
+            height: 100vh;
         }
 
         #top-bar {
-            padding: 20px 40px;
-            background: var(--sidebar-bg);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            padding: 30px 40px;
+            background: rgba(43, 45, 66, 0.9);
+            border-bottom: 3px double var(--earth-brown);
         }
 
         #test-input {
-            width: 100%;
-            padding: 12px;
-            background: var(--bg-color);
-            border: 1px solid var(--border);
-            color: white;
-            border-radius: 8px;
-            min-height: 80px;
-            font-family: inherit;
+            background: var(--aged-parchment);
+            border: 1px solid var(--earth-brown);
+            color: var(--iron-ink);
+            padding: 15px;
+            font-style: italic;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
         }
 
         #split-view {
             display: flex;
             flex-grow: 1;
             overflow: hidden;
-        }
-
-        .test-panel {
-            flex: 1;
-            padding: 30px;
-            display: flex;
-            flex-direction: column;
+            padding: 20px;
             gap: 20px;
-            overflow-y: auto;
+            background-image: url('https://www.transparenttextures.com/patterns/dark-wood.png'); /* Subtle wood texture */
         }
 
-        .gemini-side { border-right: 1px solid var(--border); }
-        
-        .panel-header {
+        .scroll-panel {
+            flex: 1;
+            background: var(--aged-parchment);
+            border: 1px solid var(--earth-brown);
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid var(--border);
+            padding: 0;
+            position: relative;
         }
 
-        .panel-header.gemini { border-color: var(--accent-gemini); color: var(--accent-gemini); }
-        .panel-header.openai { border-color: var(--accent-openai); color: var(--accent-openai); }
-
-        .model-select {
-            background: var(--bg-color);
-            border: 1px solid var(--border);
-            color: white;
-            padding: 5px;
-            border-radius: 4px;
-            font-size: 0.8rem;
+        /* Scroll Edges effect */
+        .scroll-panel::before, .scroll-panel::after {
+            content: "";
+            height: 15px;
+            background: var(--earth-brown);
+            width: 100%;
+            display: block;
         }
+
+        .panel-content {
+            padding: 25px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .panel-header {
+            border-bottom: 1px solid var(--moss-green);
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+        }
+
+        .panel-header h3 { text-align: left; margin: 0; font-size: 1.2em; }
+        
+        .gemini-text { color: var(--deep-forest); }
+        .openai-text { color: var(--earth-brown); }
 
         .output-box {
-            background: #020617;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            min-height: 200px;
+            font-family: 'Spectral', serif;
+            font-size: 1rem;
+            line-height: 1.6;
             white-space: pre-wrap;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            color: #cbd5e1;
+            color: var(--iron-ink);
         }
 
-        .status { font-size: 0.8rem; color: var(--text-dim); }
+        .status { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--moss-green); }
     </style>
 </head>
-<body>
+<body style="flex-direction: row; align-items: stretch; padding: 0;">
 
     <nav id="sidebar">
-        <h2 style="color: var(--accent-gemini);">companion</h2>
-        <a href="index.html" class="btn-stage-1">Library Dashboard</a>
-        <a href="apisettings.html" class="btn-stage-1">API Settings</a>
-        <a href="settings.html" class="btn-stage-1">General Settings</a>
+        <h2>companion</h2>
+        <a href="index.html" class="btn-stage-1 btn">The Library</a>
+        <a href="apisettings.html" class="btn-stage-1 btn">API Keys</a>
+        <a href="settings.html" class="btn-stage-1 btn secondary">Settings</a>
     </nav>
 
     <div id="test-container">
         <div id="top-bar">
-            <textarea id="test-input" placeholder="Paste a paragraph or scene from your ebook here to test extraction..."></textarea>
-            <div style="display: flex; justify-content: flex-end;">
-                <button class="btn-stage-1" style="width: auto; background: var(--accent-gemini); color: black;" onclick="runExtractionTest()">Test Entity Extraction</button>
+            <textarea id="test-input" placeholder="Paste a scene here..."></textarea>
+            <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                <button class="btn" onclick="runExtractionTest()">Consult the Oracles</button>
             </div>
         </div>
 
         <div id="split-view">
-            <div class="test-panel gemini-side">
-                <div class="panel-header gemini">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3>Gemini Analysis</h3>
-                        <span id="gemini-status" class="status">Idle</span>
+            <div class="scroll-panel">
+                <div class="panel-content">
+                    <div class="panel-header">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 class="gemini-text">Gemini Scroll</h3>
+                            <span id="gemini-status" class="status">Idle</span>
+                        </div>
+                        <select id="gemini-model-choice" class="model-select">
+                            <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                        </select>
                     </div>
-                    <select id="gemini-model-choice" class="model-select">
-                        <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-                        <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-                    </select>
+                    <div id="gemini-output" class="output-box">The ink has not yet flowed...</div>
                 </div>
-                <div id="gemini-output" class="output-box">Waiting for text...</div>
             </div>
 
-            <div class="test-panel">
-                <div class="panel-header openai">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3>OpenAI Analysis</h3>
-                        <span id="openai-status" class="status">Idle</span>
+            <div class="scroll-panel">
+                <div class="panel-content">
+                    <div class="panel-header">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 class="openai-text">OpenAI Scroll</h3>
+                            <span id="openai-status" class="status">Idle</span>
+                        </div>
+                        <select id="openai-model-choice" class="model-select">
+                            <option value="gpt-4o">gpt-4o</option>
+                            <option value="o1-preview">o1-preview</option>
+                        </select>
                     </div>
-                    <select id="openai-model-choice" class="model-select">
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="o1-preview">o1-preview</option>
-                    </select>
+                    <div id="openai-output" class="output-box">Waiting for the quill...</div>
                 </div>
-                <div id="openai-output" class="output-box">Waiting for text...</div>
             </div>
         </div>
     </div>
 
     <script>
+        // ... (Same runExtractionTest, callGemini, and callOpenAI scripts as before) ...
         async function runExtractionTest() {
             const input = document.getElementById('test-input').value;
             if (!input) return alert("Please paste some book text to analyze.");
