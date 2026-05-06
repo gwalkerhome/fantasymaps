@@ -1,34 +1,41 @@
-// prompts.js - The Scribe's Instructions v1.5
-
+// v1.2 prompts.js
 export const CARTOGRAPHER_PROMPTS = {
-    buildBindingPrompt: (chapters, imageList) => {
-        // Format the chapters with their text snippets for the AI
-        const context = chapters.map(c => `[FILE: ${c.name}]\nCONTENT: ${c.text}...`).join("\n\n---\n\n");
-        const images = imageList.map(img => img.name).join(", ");
-        
-        return `
-            You are a Master Cartographer for a High Fantasy library.
-            
-            CHAPTER CONTENT SNIPPETS:
-            ${context}
-            
-            AVAILABLE MAP IMAGES:
-            ${images}
-            
-            TASK:
-            1. Analyze the content of each chapter for geographical names, locations, or descriptions.
-            2. Match each chapter to the map image that best fits that location.
-            3. If a specific match is found (e.g., 'map_coast.jpg' for a coastal chapter), use it.
-            4. If no specific map is relevant based on the text, use 'chart.jpg' or a general map.
-            
-            SPOILER RULE: Do not include plot summaries. 
-            
-            OUTPUT FORMAT (JSON ONLY):
-            {
-              "ledger": [
-                {"chapter": "filename.xhtml", "map_file": "image.jpg"}
-              ]
-            }
-        `;
-    }
+  buildBindingPrompt: (spineIds, imageFiles) => {
+    // Convert spine list to a cleaner comma-separated string
+    const chapterList = spineIds.join(', ');
+    // Convert image list to a cleaner comma-separated string
+    const imageList = imageFiles.map(img => img.name).join(', ');
+
+    return `
+You are a Master Cartographer for a High Fantasy library.
+A book has been analyzed, revealing the following structure:
+
+CHAPTERS FOUND:
+${chapterList}
+
+IMAGES EXTRACTED:
+${imageList}
+
+YOUR TASK:
+1.  Analyze the CHAPTERS FOUND and the IMAGES EXTRACTED.
+2.  Bind each chapter (by ID) to the most relevant map file.
+3.  If a chapter's context is unknown, use the most logical map from the list (often the first one or a "world map").
+4.  Do NOT invent filenames. You must ONLY choose from the provided IMAGES EXTRACTED list.
+
+IMPORTANT KEYS:
+- Look for common abbreviations like 'ch' for chapter or 'pt' for part.
+- Assume 'sp.jpg' refers to the 'Shattered Plains' if relevant to the book's context.
+
+SPOILER RULE:
+Do not include plot summaries or details. Only output the mapping.
+
+You must output ONLY a valid JSON object in this format:
+{
+  "ledger": [
+    { "chapter": "tp01", "map_file": "chart.jpg" },
+    { "chapter": "ch45", "map_file": "sp.jpg" }
+  ]
+}
+`;
+  }
 };
