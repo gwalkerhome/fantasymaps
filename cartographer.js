@@ -1,4 +1,4 @@
-// v1.6 cartographer.js
+// v1.7 cartographer.js
 import { savetolibrary, uploadartifact } from './firebase.js';
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
@@ -17,8 +17,8 @@ const mirror = (id, content) => {
 };
 
 async function callgemini(prompt, apikey) {
-    // Reverting to v1beta to ensure the most modern features are available if needed
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apikey}`;
+    // UPDATED: Using gemini-2.5-flash as identified in the model list
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apikey}`;
     
     mirror('promptmirror', prompt);
 
@@ -26,10 +26,9 @@ async function callgemini(prompt, apikey) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt + "\n\nIMPORTANT: Return ONLY a raw JSON object. Do not include markdown formatting or backticks." }] }],
+            contents: [{ parts: [{ text: prompt + "\n\nCRITICAL: You must return ONLY a valid JSON object. No conversation, no markdown backticks, no preamble." }] }],
             generationConfig: { 
                 temperature: 0.1 
-                // response_mime_type removed as it was causing the 400 error
             }
         })
     });
@@ -38,12 +37,12 @@ async function callgemini(prompt, apikey) {
     
     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
         let text = data.candidates[0].content.parts[0].text;
-        // Clean up any stray markdown backticks if the AI ignores the instruction
+        // Clean up markdown if the AI includes it anyway
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
         return text;
     } else {
         mirror('aimirror', data);
-        throw new Error("Gemini stalled. See Scribe's Mirror.");
+        throw new Error("The engine stalled. Check the raw response in Scribe's Mirror.");
     }
 }
 
@@ -78,7 +77,7 @@ async function processbook() {
         const imgList = imagefiles.map(f => ({ name: f.split('/').pop() }));
         const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(spine, imgList);
 
-        log("Sending request to Gemini...");
+        log("Sending request to Gemini 2.5-Flash...");
         const aiResponse = await callgemini(prompt, apikey);
         mirror('aimirror', aiResponse);
 
@@ -92,7 +91,7 @@ async function processbook() {
             last_updated: new Date().toISOString()
         });
 
-        log("Ledger sealed. The tome is ready.");
+        log("Ledger sealed. The tome is ready for the Map Room.");
         btn.disabled = false;
 
     } catch (error) {
