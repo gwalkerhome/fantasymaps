@@ -4,25 +4,24 @@ export const CARTOGRAPHER_PROMPTS = {
     buildBindingPrompt: (chapters, imageList) => {
         return `
             You are a Master Cartographer for a High Fantasy library. 
+            I have a book called "The Way of Kings".
             
-            CHAPTERS TO MAP:
+            CHAPTERS FOUND:
             ${chapters.join(", ")}
             
-            AVAILABLE IMAGES:
+            IMAGES EXTRACTED:
             ${imageList.map(img => img.name).join(", ")}
             
             TASK:
-            1. Analyze the list of images and identify those that are MAPS (look for "map", "chart", "area", "plate").
-            2. For each chapter, scan the map names for a match. 
-               - Example: If a chapter is "ch01" and there is a "map_01.jpg", that is a match.
-               - Example: If a chapter is "htp01" and there is a "world_map.jpg", that is a match.
-            3. CRITICAL: Do NOT bind chapters to images that are obviously not maps (e.g., 'cover.jpg', 'logo.jpg', 'portrait.jpg', 'icon.png').
-            4. If no specific map is relevant for a chapter, bind it to the "World Map" or "chart.jpg".
+            1. Analyze the chapter titles and the image filenames.
+            2. Identify which images are MAPS. 
+            3. CRITICAL: Do NOT bind chapters to images that are obviously not maps (e.g., 'cover.jpg', 'logo.jpg', 'portrait.jpg', 'icon.png', 'chart.jpg').
+            4. Bind each chapter to the most relevant map based on name or number.
+            5. If no specific map is relevant, bind it to the "World Map".
             
-            SPOILER RULE: Do not include plot summaries. 
+            SPOILER RULE: Do not include plot summaries. Only output a JSON mapping.
             
-            OUTPUT FORMAT:
-            You must output ONLY a JSON object in this exact format:
+            FORMAT:
             {
               "ledger": [
                 {"chapter": "Chapter ID", "map_file": "filename.jpg"}
