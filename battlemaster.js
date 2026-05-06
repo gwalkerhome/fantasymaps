@@ -1,7 +1,7 @@
-// v2.3 | battlemaster.js
+// v2.4 | battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = "v2.3";
+const VERSION = "v2.4";
 
 const updateBadge = () => {
     const badge = document.getElementById('version-badge');
@@ -46,28 +46,29 @@ async function callOpenAI(prompt, key) {
 async function runTrial(imagefiles, chapterData) {
     const gKey = localStorage.getItem('gemini_key');
     const oKey = localStorage.getItem('openai_key');
+    
+    // Clean image list
     const imgList = imagefiles.map(f => ({ name: f.split('/').pop() }));
     
-    // Pass the rich chapter data (name + snippet) to the prompt builder
+    // Build the prompt with the new content context
     const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(chapterData, imgList);
     
     if (document.getElementById('g_prompt')) document.getElementById('g_prompt').value = prompt;
     if (document.getElementById('o_prompt')) document.getElementById('o_prompt').value = prompt;
 
-    // Run both
-    const runG = async () => {
-        const res = await callGemini(prompt, gKey);
-        document.getElementById('g_output').value = res;
-        document.getElementById('g_parsed').value = JSON.stringify(JSON.parse(res).ledger, null, 2);
-    };
-    const runO = async () => {
-        const res = await callOpenAI(prompt, oKey);
-        document.getElementById('o_output').value = res;
-        document.getElementById('o_parsed').value = JSON.stringify(JSON.parse(res).ledger, null, 2);
+    const runStation = async (engine, key, outId, parseId, statusId) => {
+        try {
+            const res = await (engine === 'gemini' ? callGemini(prompt, key) : callOpenAI(prompt, key));
+            document.getElementById(outId).value = res;
+            const parsed = JSON.parse(res);
+            document.getElementById(parseId).value = JSON.stringify(parsed.ledger, null, 2);
+        } catch (err) {
+            console.error(err);
+        }
     };
 
-    runG();
-    runO();
+    runStation('gemini', gKey, 'g_output', 'g_parsed', 'g_status_2');
+    runStation('openai', oKey, 'o_output', 'o_parsed', 'o_status_2');
 }
 
 document.getElementById('startbattle').onclick = async () => {
@@ -77,13 +78,13 @@ document.getElementById('startbattle').onclick = async () => {
     const zip = await JSZip.loadAsync(file);
     const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
     
-    // Find chapter files (xhtml/html) and grab a snippet of text
+    // Grab first 5 chapters for analysis
     const chapterFiles = Object.keys(zip.files).filter(f => f.match(/\.(xhtml|html)$/i)).slice(0, 5);
     const chapterData = await Promise.all(chapterFiles.map(async (name) => {
-        const text = await zip.file(name).async("string");
-        // Strip HTML tags and grab first 1000 chars
-        const cleanText = text.replace(/<[^>]*>/g, ' ').substring(0, 1000);
-        return { id: name.split('/').pop(), snippet: cleanText };
+        const content = await zip.file(name).async("string");
+        // Simple HTML strip and take first 800 chars
+        const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 800);
+        return { name: name.split('/').pop(), text: text };
     }));
 
     runTrial(imagefiles, chapterData);
