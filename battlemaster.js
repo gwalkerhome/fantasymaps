@@ -1,13 +1,12 @@
-// v1.7 | battlemaster.js
+// v2.0 | battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = "v1.7";
+const VERSION = "v2.0";
 const log = (msg) => { 
     const el = document.getElementById('battlelog');
     if (el) el.innerText = msg; 
 };
 
-// Ensure the UI is updated only when the element is ready
 const updateBadge = () => {
     const badge = document.getElementById('version-badge');
     if (badge) badge.innerText = VERSION;
@@ -86,7 +85,10 @@ async function runTrial(imagefiles) {
     const gKey = localStorage.getItem('gemini_key');
     const oKey = localStorage.getItem('openai_key');
     const testChapters = ["htp01", "ch01", "ch45", "ch80", "bm01"];
+    
+    // Clean the filenames for the prompt
     const imgObjects = imagefiles.map(f => ({ name: f.split('/').pop() }));
+    
     const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(testChapters, imgObjects);
 
     const gPromptEl = document.getElementById('g_prompt');
