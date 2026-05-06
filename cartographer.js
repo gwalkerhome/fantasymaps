@@ -1,4 +1,4 @@
-// v1.5 cartographer.js
+// v1.6 cartographer.js
 import { savetolibrary, uploadartifact } from './firebase.js';
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
@@ -17,19 +17,19 @@ const mirror = (id, content) => {
 };
 
 async function callgemini(prompt, apikey) {
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apikey}`;
+    // Reverting to v1beta to ensure the most modern features are available if needed
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apikey}`;
     
-    // Show what we are sending!
     mirror('promptmirror', prompt);
 
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
+            contents: [{ parts: [{ text: prompt + "\n\nIMPORTANT: Return ONLY a raw JSON object. Do not include markdown formatting or backticks." }] }],
             generationConfig: { 
-                response_mime_type: "application/json",
                 temperature: 0.1 
+                // response_mime_type removed as it was causing the 400 error
             }
         })
     });
@@ -37,10 +37,13 @@ async function callgemini(prompt, apikey) {
     const data = await response.json();
     
     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        return data.candidates[0].content.parts[0].text;
+        let text = data.candidates[0].content.parts[0].text;
+        // Clean up any stray markdown backticks if the AI ignores the instruction
+        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return text;
     } else {
         mirror('aimirror', data);
-        throw new Error("Gemini returned an empty response. Check Mirror.");
+        throw new Error("Gemini stalled. See Scribe's Mirror.");
     }
 }
 
