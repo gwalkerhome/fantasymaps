@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.0 | ai comparison arena</title>
+    <title>v1.1 | ai comparison arena</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -41,6 +41,15 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
+        #version-badge {
+            font-size: 0.6em;
+            background: var(--earth-brown);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
@@ -49,7 +58,7 @@
             <a href="apisettings.html" class="btn secondary">← settings</a>
         </div>
 
-        <h1 style="text-align: center;">the arena: gemini vs openai</h1>
+        <h1 style="text-align: center;">the arena <span id="version-badge">loading...</span></h1>
 
         <section class="upload-section" style="text-align: center; margin-bottom: 20px;">
             <input type="file" id="battleupload" accept=".epub">
