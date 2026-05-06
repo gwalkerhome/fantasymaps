@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.1 | the scribe - book processing</title>
+    <title>v1.2 | the scribe - book processing</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -15,7 +15,6 @@
         </div>
 
         <h1>the scribe</h1>
-        <p style="text-align: center;">extracting maps and lore from your digital tomes.</p>
         
         <section class="upload-section" style="background: rgba(106, 153, 78, 0.1); padding: 25px; border: 2px dashed var(--moss-green); margin-bottom: 30px;">
             <div class="form-group">
@@ -24,10 +23,13 @@
             <button class="btn" id="processbutton">analyze tome</button>
         </section>
 
-        <div id="statuslog" style="font-family: 'Spectral', serif; font-size: 0.9em; height: 250px; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 15px; border: 1px solid var(--earth-brown); display: none; line-height: 1.6;">
-            </div>
+        <h3>process log</h3>
+        <div id="statuslog" style="font-family: monospace; font-size: 0.8em; height: 150px; overflow-y: auto; background: #fff; padding: 10px; border: 1px solid var(--earth-brown); margin-bottom: 20px; display: none;"></div>
+
+        <h3>scribe's mirror (raw ai output)</h3>
+        <textarea id="aimirror" style="width: 100%; height: 300px; font-family: monospace; font-size: 0.85em; padding: 15px; border: 1px solid var(--earth-brown); background: #fdfaf6; color: #333;" readonly placeholder="the ai's thoughts will appear here..."></textarea>
     </div>
 
-        <script type="module" src="cartographer.js"></script>
+    <script type="module" src="cartographer.js"></script>
 </body>
 </html>
