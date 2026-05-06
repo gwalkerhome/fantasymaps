@@ -3,11 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.2 | ai comparison arena</title>
+    <title>v1.3 | ai cartographer arena</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        /* ... existing styles ... */
+        /* Modernized split view using columns */
+        .arena-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .ai-factory-line {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .factory-station {
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid var(--earth-brown);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .gemini-border { border-color: var(--moss-green); }
+        .openai-border { border-color: #74aa9c; }
+        
+        .output-box {
+            width: 100%;
+            height: 250px;
+            font-family: monospace;
+            font-size: 0.8em;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .small-output { height: 120px; font-size: 0.75em; }
+        
+        .stats {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
         #version-badge {
             font-size: 0.6em;
             background: var(--earth-brown);
@@ -20,12 +63,12 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" style="max-width: 1400px;">
         <div class="back-nav">
             <a href="settings.html" class="btn secondary">← settings</a>
         </div>
 
-        <h1 style="text-align: center;">the arena <span id="version-badge">v1.2</span></h1>
+        <h1 style="text-align: center;">the arena <span id="version-badge">v1.3</span></h1>
 
         <section class="upload-section" style="text-align: center; margin-bottom: 20px;">
             <input type="file" id="battleupload" accept=".epub">
@@ -34,20 +77,46 @@
         </section>
 
         <div id="battlelog" style="text-align: center; font-family: 'Spectral'; font-style: italic; color: var(--earth-brown); margin-bottom: 10px;">
-            Select a book to begin the trial...
+            Select a book to begin the logic trial...
         </div>
 
         <div class="arena-grid">
-            <div class="ai-column gemini-border">
-                <div class="stats" style="color: var(--moss-green);">Engine: Gemini 2.5-Flash</div>
-                <div id="g_status">Waiting...</div>
-                <textarea id="g_output" class="output-box" readonly></textarea>
+            <div class="ai-factory-line">
+                <div class="factory-station gemini-border">
+                    <div class="stats" style="color: var(--moss-green);">Engine: Gemini 2.5-Flash</div>
+                    <h3>station 1: prompt debug</h3>
+                    <div id="g_status_1">Waiting...</div>
+                    <textarea id="g_prompt" class="output-box small-output" readonly></textarea>
+                </div>
+                <div class="factory-station gemini-border">
+                    <h3>station 2: raw binding analysis</h3>
+                    <div id="g_status_2">Waiting...</div>
+                    <textarea id="g_output" class="output-box" readonly></textarea>
+                </div>
+                <div class="factory-station gemini-border">
+                    <h3>station 3: parsed ledger preview</h3>
+                    <div id="g_status_3">Waiting...</div>
+                    <textarea id="g_parsed" class="output-box small-output" readonly></textarea>
+                </div>
             </div>
 
-            <div class="ai-column openai-border">
-                <div class="stats" style="color: #74aa9c);">Engine: GPT-4o-mini</div>
-                <div id="o_status">Waiting...</div>
-                <textarea id="o_output" class="output-box" readonly></textarea>
+            <div class="ai-factory-line">
+                <div class="factory-station openai-border">
+                    <div class="stats" style="color: #74aa9c);">Engine: GPT-4o-mini</div>
+                    <h3>station 1: prompt debug</h3>
+                    <div id="o_status_1">Waiting...</div>
+                    <textarea id="o_prompt" class="output-box small-output" readonly></textarea>
+                </div>
+                <div class="factory-station openai-border">
+                    <h3>station 2: raw binding analysis</h3>
+                    <div id="o_status_2">Waiting...</div>
+                    <textarea id="o_output" class="output-box" readonly></textarea>
+                </div>
+                <div class="factory-station openai-border">
+                    <h3>station 3: parsed ledger preview</h3>
+                    <div id="o_status_3">Waiting...</div>
+                    <textarea id="o_parsed" class="output-box small-output" readonly></textarea>
+                </div>
             </div>
         </div>
     </div>
