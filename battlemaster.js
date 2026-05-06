@@ -1,15 +1,26 @@
-// v1.8 battlemaster.js
+// v1.9 battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const MASTER_VERSION = "v1.8";
+const MASTER_VERSION = "v1.9";
 
-// Update version badges in the UI
-const mV = document.getElementById('master-v');
-const pV = document.getElementById('prompt-v');
-if (mV) mV.innerText = MASTER_VERSION;
-if (pV) pV.innerText = CARTOGRAPHER_PROMPTS.version || "unknown";
+// Ensure UI is ready before updating badges
+const initUI = () => {
+    const mV = document.getElementById('master-v');
+    const pV = document.getElementById('prompt-v');
+    if (mV) mV.innerText = MASTER_VERSION;
+    if (pV) pV.innerText = CARTOGRAPHER_PROMPTS.version || "unknown";
+};
 
-const log = (msg) => { document.getElementById('battlelog').innerText = msg; };
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUI);
+} else {
+    initUI();
+}
+
+const log = (msg) => { 
+    const el = document.getElementById('battlelog');
+    if (el) el.innerText = msg; 
+};
 
 function cleanResponse(text) {
     if (typeof text !== 'string') return JSON.stringify(text);
@@ -74,27 +85,30 @@ async function runOpenAIStation(prompt, key) {
     }
 }
 
-document.getElementById('startbattle').onclick = async () => {
-    const file = document.getElementById('battleupload').files[0];
-    if (!file) return;
+const startBtn = document.getElementById('startbattle');
+if (startBtn) {
+    startBtn.onclick = async () => {
+        const file = document.getElementById('battleupload').files[0];
+        if (!file) return;
 
-    const gKey = localStorage.getItem('gemini_key');
-    const oKey = localStorage.getItem('openai_key');
-    
-    log("Unzipping parchment...");
-    const zip = await JSZip.loadAsync(file);
-    const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
-    const imgObjects = imagefiles.map(f => ({ name: f.split('/').pop() }));
+        const gKey = localStorage.getItem('gemini_key');
+        const oKey = localStorage.getItem('openai_key');
+        
+        log("Unzipping parchment...");
+        const zip = await JSZip.loadAsync(file);
+        const imagefiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
+        const imgObjects = imagefiles.map(f => ({ name: f.split('/').pop() }));
 
-    const testChapters = ["htp01", "ch01", "ch45", "ch80", "bm01"];
-    const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(testChapters, imgObjects);
+        const testChapters = ["htp01", "ch01", "ch45", "ch80", "bm01"];
+        const prompt = CARTOGRAPHER_PROMPTS.buildBindingPrompt(testChapters, imgObjects);
 
-    document.getElementById('g_prompt').value = prompt;
-    document.getElementById('o_prompt').value = prompt;
-    document.getElementById('g_status_1').innerText = "READY";
-    document.getElementById('o_status_1').innerText = "READY";
+        document.getElementById('g_prompt').value = prompt;
+        document.getElementById('o_prompt').value = prompt;
+        document.getElementById('g_status_1').innerText = "READY";
+        document.getElementById('o_status_1').innerText = "READY";
 
-    log("The scholars are reviewing the maps...");
-    runGeminiStation(prompt, gKey);
-    runOpenAIStation(prompt, oKey);
-};
+        log("The scholars are reviewing the maps...");
+        runGeminiStation(prompt, gKey);
+        runOpenAIStation(prompt, oKey);
+    };
+}
