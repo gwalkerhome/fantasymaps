@@ -8,96 +8,83 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        .book-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .book-card {
+            background: rgba(255, 255, 255, 0.3);
+            border: 1px solid var(--earth-brown);
+            padding: 10px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        .book-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .cover-preview {
+            width: 100%;
+            height: 280px;
+            background: var(--earth-brown);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--aged-parchment);
+            font-family: 'Cinzel', serif;
+            object-fit: cover;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.2);
+        }
+    </style>
 </head>
 <body>
 
     <div class="container">
         <h1>high fantasy companion</h1>
         
-        <section class="upload-section" style="background: rgba(106, 153, 78, 0.1); padding: 25px; border: 2px dashed var(--moss-green); margin-bottom: 30px;">
-            <h3>upload new tome</h3>
-            <p>select an epub file for the ai to analyze.</p>
-            <div class="form-group">
-                <input type="file" id="bookupload" accept=".epub">
-            </div>
-            <button class="btn" id="processbutton">process epub</button>
-        </section>
+        <div style="text-align: center; margin-bottom: 40px; border-bottom: 1px solid var(--moss-green); padding-bottom: 20px;">
+            <a href="scribe.html" class="btn">add new tome to vault</a>
+        </div>
 
         <section class="library-section">
             <h3>my collection</h3>
-            <ul class="settings-list" id="librarylist">
-                <li class="settings-item">consulting the shelves...</li>
-            </ul>
+            <div class="book-grid" id="librarylist">
+                <p>consulting the shelves...</p>
+            </div>
         </section>
 
-        <div style="margin-top: 40px; text-align: center;">
+        <div style="margin-top: 40px; text-align: center; border-top: 1px solid var(--moss-green); padding-top: 20px;">
             <a href="settings.html" class="btn secondary">settings & tools</a>
         </div>
     </div>
 
     <script type="module">
-        import { fetchlibrary, savetolibrary } from './firebase.js';
+        import { fetchlibrary } from './firebase.js';
 
         async function refreshlibrary() {
-            const list = document.getElementById('librarylist');
+            const grid = document.getElementById('librarylist');
             const books = await fetchlibrary();
+            
             if (books.length === 0) {
-                list.innerHTML = '<li class="settings-item">the shelves are currently bare.</li>';
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">the shelves are currently bare.</p>';
                 return;
             }
-            list.innerHTML = books.map(book => `
-                <li class="settings-item" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong style="font-family: 'Cinzel', serif;">${book.title}</strong><br>
-                        <span style="font-size: 0.8em; color: var(--earth-brown);">status: ${book.status}</span>
-                    </div>
-                    <a href="map.html?id=${book.id}" class="btn">open map</a>
-                </li>
+
+            grid.innerHTML = books.map(book => `
+                <div class="book-card">
+                    ${book.cover 
+                        ? `<img src="${book.cover}" class="cover-preview" alt="${book.title}">`
+                        : `<div class="cover-preview">No Cover Found</div>`
+                    }
+                    <strong style="display: block; margin-bottom: 10px; font-family: 'Cinzel', serif; font-size: 0.9em;">${book.title}</strong>
+                    <a href="map.html?id=${book.id}" class="btn" style="font-size: 0.7em; padding: 8px 15px;">open map</a>
+                </div>
             `).join('');
         }
-
-        document.getElementById('processbutton').onclick = async () => {
-            const fileinput = document.getElementById('bookupload');
-            if (!fileinput.files[0]) return alert("please select a file first.");
-            
-            const file = fileinput.files[0];
-            const btn = document.getElementById('processbutton');
-            btn.innerText = "reading tome...";
-            
-            try {
-                const zip = await JSZip.loadAsync(file);
-                // logic to find the metadata file in an epub
-                const containerxml = await zip.file("META-INF/container.xml").async("string");
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(containerxml, "text/xml");
-                const fullpath = doc.getElementsByTagName("rootfile")[0].getAttribute("full-path");
-                
-                const contentxml = await zip.file(fullpath).async("string");
-                const contentdoc = parser.parseFromString(contentxml, "text/xml");
-                const title = contentdoc.getElementsByTagName("dc:title")[0]?.textContent || file.name;
-                
-                // create a safe id from the title
-                const bookid = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                
-                const bookdata = {
-                    title: title,
-                    status: "processing",
-                    filename: file.name,
-                    added: new Date()
-                };
-
-                await savetolibrary(bookid, bookdata);
-                btn.innerText = "process epub";
-                refreshlibrary();
-                alert("tome added to the vault!");
-                
-            } catch (error) {
-                console.error(error);
-                alert("failed to read the epub structure.");
-                btn.innerText = "process epub";
-            }
-        };
 
         window.onload = refreshlibrary;
     </script>
