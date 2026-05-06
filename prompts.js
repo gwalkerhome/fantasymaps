@@ -1,25 +1,23 @@
-// prompts.js - The Scribe's Instructions v1.3
+// prompts.js - The Scribe's Instructions v1.4
 
 export const CARTOGRAPHER_PROMPTS = {
-    // This function creates the prompt that asks Gemini to match images to chapters
     buildBindingPrompt: (chapters, imageList) => {
+        const chapterContext = chapters.map(c => `ID: ${c.id}\nCONTENT: ${c.snippet}...`).join("\n\n---\n\n");
+        
         return `
-            You are a Master Cartographer for a High Fantasy library. 
-            I have a book called "The Way of Kings".
+            You are a Master Cartographer. 
+            I need to bind book chapters to the correct map images based on their content.
             
-            CHAPTERS FOUND:
-            ${chapters.join(", ")}
+            CHAPTER DATA:
+            ${chapterContext}
             
-            IMAGES EXTRACTED:
+            AVAILABLE MAP IMAGES:
             ${imageList.map(img => img.name).join(", ")}
             
             TASK:
-            1. Analyze the chapter titles and the image filenames.
-            2. Identify which images are MAPS (not character sketches or icons).
-            3. Bind each chapter to the most relevant map.
-            4. If no specific map is relevant, bind it to the "World Map".
-            
-            SPOILER RULE: Do not include plot summaries. Only output a JSON mapping.
+            1. Read the chapter snippets to understand the geography or location mentioned.
+            2. Match each chapter ID to the map filename that best represents that location.
+            3. If no specific map is mentioned in the content, use the general world map or 'chart.jpg'.
             
             FORMAT:
             {
