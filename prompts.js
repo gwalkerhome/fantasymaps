@@ -1,5 +1,6 @@
 // v1.1 prompts.js - The Scribe's Instructions
 export const CARTOGRAPHER_PROMPTS = {
+    version: "v1.1",
     buildBindingPrompt: (chapters, imageList) => {
         return `
             You are a Master Cartographer for a High Fantasy library. 
