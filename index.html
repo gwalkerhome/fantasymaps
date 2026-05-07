@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.3 | high fantasy companion - library</title>
+    <title>v1.4 | high fantasy companion - library</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <style>
+        .series-container {
+            margin-bottom: 50px;
+        }
+        .series-title {
+            font-family: 'Cinzel', serif;
+            border-bottom: 1px solid var(--earth-brown);
+            padding-bottom: 5px;
+            margin-bottom: 20px;
+            color: var(--earth-brown);
+        }
         .book-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 30px;
-            margin-top: 30px;
         }
         .book-card {
             background: rgba(255, 255, 255, 0.3);
@@ -39,6 +48,14 @@
             object-fit: cover;
             box-shadow: 3px 3px 10px rgba(0,0,0,0.2);
         }
+        .author-tag {
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--moss-green);
+            margin-bottom: 5px;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -50,11 +67,8 @@
             <a href="scribe.html" class="btn">add new tome to vault</a>
         </div>
 
-        <section class="library-section">
-            <h3>my collection</h3>
-            <div class="book-grid" id="librarylist">
-                <p>consulting the shelves...</p>
-            </div>
+        <section class="library-section" id="library-content">
+            <p style="text-align: center;">consulting the shelves...</p>
         </section>
 
         <div style="margin-top: 40px; text-align: center; border-top: 1px solid var(--moss-green); padding-top: 20px;">
@@ -63,27 +77,71 @@
     </div>
 
     <script type="module">
-        import { fetchlibrary } from './firebase.js';
+        import { db } from './firebase.js';
+        import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         async function refreshlibrary() {
-            const grid = document.getElementById('librarylist');
-            const books = await fetchlibrary();
+            const content = document.getElementById('library-content');
+            const userid = "default-user";
             
-            if (books.length === 0) {
-                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">the shelves are currently bare.</p>';
-                return;
-            }
+            try {
+                // Fetch all authors for this user
+                const authorsSnap = await getDocs(collection(db, "users", userid, "authors"));
+                
+                if (authorsSnap.empty) {
+                    content.innerHTML = '<p style="text-align: center;">the shelves are currently bare.</p>';
+                    return;
+                }
 
-            grid.innerHTML = books.map(book => `
-                <div class="book-card">
-                    ${book.cover 
-                        ? `<img src="${book.cover}" class="cover-preview" alt="${book.title}">`
-                        : `<div class="cover-preview">No Cover Found</div>`
+                content.innerHTML = ''; // Clear loading text
+
+                for (const authorDoc of authorsSnap.docs) {
+                    const authorName = authorDoc.id;
+                    
+                    // Fetch all series for this author
+                    const seriesSnap = await getDocs(collection(db, "users", userid, "authors", authorName, "series"));
+                    
+                    for (const seriesDoc of seriesSnap.docs) {
+                        const seriesTitle = seriesDoc.id;
+                        
+                        // Create a section for this series
+                        const seriesSection = document.createElement('div');
+                        seriesSection.className = 'series-container';
+                        
+                        const displaySeriesName = seriesTitle.replace(/-/g, ' ');
+                        const displayAuthorName = authorName.replace(/-/g, ' ');
+
+                        seriesSection.innerHTML = `
+                            <h3 class="series-title">${displaySeriesName} <span style="font-size: 0.6em; font-weight: normal; font-style: italic;">by ${displayAuthorName}</span></h3>
+                            <div class="book-grid" id="grid-${seriesTitle}"></div>
+                        `;
+                        content.appendChild(seriesSection);
+
+                        // Fetch all books in this series
+                        const booksSnap = await getDocs(collection(db, "users", userid, "authors", authorName, "series", seriesTitle, "books"));
+                        const grid = document.getElementById(`grid-${seriesTitle}`);
+
+                        grid.innerHTML = booksSnap.docs.map(bookDoc => {
+                            const book = bookDoc.data();
+                            const bookPath = `?u=${userid}&a=${authorName}&s=${seriesTitle}&b=${bookDoc.id}`;
+                            
+                            return `
+                                <div class="book-card">
+                                    ${book.cover 
+                                        ? `<img src="${book.cover}" class="cover-preview" alt="${book.title}">`
+                                        : `<div class="cover-preview">No Cover Found</div>`
+                                    }
+                                    <strong style="display: block; margin-bottom: 10px; font-family: 'Cinzel', serif; font-size: 0.9em;">${book.title}</strong>
+                                    <a href="map.html${bookPath}" class="btn" style="font-size: 0.7em; padding: 8px 15px;">open map</a>
+                                </div>
+                            `;
+                        }).join('');
                     }
-                    <strong style="display: block; margin-bottom: 10px; font-family: 'Cinzel', serif; font-size: 0.9em;">${book.title}</strong>
-                    <a href="map.html?id=${book.id}" class="btn" style="font-size: 0.7em; padding: 8px 15px;">open map</a>
-                </div>
-            `).join('');
+                }
+            } catch (err) {
+                console.error("Library Error:", err);
+                content.innerHTML = '<p>Error consulting the shelves. Check console.</p>';
+            }
         }
 
         window.onload = refreshlibrary;
