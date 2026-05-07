@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.1 | map test station</title>
+    <title>v1.2 | map test station</title>
     <link rel="stylesheet" href="style.css">
     <style>
         .map-wrapper {
@@ -70,12 +70,12 @@
             <a href="aicomparison.html" class="btn secondary">← back to arena</a>
         </div>
         
-        <h1 style="text-align: center;">cartographer's lightbox <span id="version-badge">v1.1</span></h1>
+        <h1 style="text-align: center;">cartographer's lightbox <span id="version-badge">v1.2</span></h1>
 
         <div class="controls">
-            <button id="load-stored" class="btn">load ai mapping</button>
+            <button id="load-stored" class="btn">refresh data</button>
             <button id="toggle-grid" class="btn secondary">toggle grid</button>
-            <span id="map-status">Waiting for data...</span>
+            <span id="map-status">Checking for map data...</span>
         </div>
 
         <div class="map-wrapper" id="map-container" style="display:none;">
@@ -124,7 +124,6 @@
             polyGroup.innerHTML = '';
             pathGroup.innerHTML = '';
 
-            // Render Points (Cities/Keeps)
             data.points?.forEach(p => {
                 const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                 circle.setAttribute("cx", p.x);
@@ -142,7 +141,6 @@
                 pointGroup.appendChild(text);
             });
 
-            // Render Polygons (Forests/Regions)
             data.polygons?.forEach(poly => {
                 const p = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
                 const pointsStr = poly.coords.map(c => c.join(',')).join(' ');
@@ -151,7 +149,6 @@
                 polyGroup.appendChild(p);
             });
 
-            // Render Paths (Rivers/Roads)
             data.paths?.forEach(path => {
                 const p = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
                 const pointsStr = path.coords.map(c => c.join(',')).join(' ');
@@ -161,17 +158,16 @@
             });
         }
 
-        document.getElementById('load-stored').onclick = () => {
+        function loadFromStorage() {
             const rawData = localStorage.getItem('active_map_data');
             const imgData = localStorage.getItem('active_map_image');
 
             if (!rawData || !imgData) {
-                status.innerText = "No map data found in storage.";
+                status.innerText = "No map data found. Run a battle first!";
                 return;
             }
 
             try {
-                // OpenAI sometimes wraps JSON in markdown blocks
                 const cleanJson = rawData.replace(/```json|```/g, "").trim();
                 const data = JSON.parse(cleanJson);
                 
@@ -179,12 +175,17 @@
                 mapContainer.style.display = 'inline-block';
                 drawGrid();
                 renderMapping(data);
-                status.innerText = `Displaying: ${data.map_name || 'Extracted Map'}`;
+                status.innerText = `Displaying: ${data.map_name || 'Detected Map'}`;
             } catch (e) {
                 status.innerText = "Error parsing AI data.";
                 console.error(e);
             }
-        };
+        }
+
+        // Auto-load when page opens
+        window.onload = loadFromStorage;
+
+        document.getElementById('load-stored').onclick = loadFromStorage;
 
         mapContainer.onmousemove = (e) => {
             const rect = mapContainer.getBoundingClientRect();
