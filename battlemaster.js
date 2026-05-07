@@ -1,7 +1,7 @@
-// v2.9 | battlemaster.js
+// v3.0 | battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = "v2.9";
+const VERSION = "v3.0";
 
 const updateBadge = () => {
     const badge = document.getElementById('version-badge');
@@ -14,7 +14,6 @@ if (document.readyState === 'loading') {
     updateBadge();
 }
 
-// Helper to convert blob to base64
 const getBase64 = (blob) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -24,35 +23,48 @@ const getBase64 = (blob) => {
     });
 };
 
-async function callGeminiVision(base64Data, mimeType, key) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+async function callOpenAIVision(base64Data, mimeType, key) {
+    const url = "https://api.openai.com/v1/chat/completions";
     const prompt = CARTOGRAPHER_PROMPTS.describeImagePrompt();
 
     const body = {
-        contents: [{
-            parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mimeType, data: base64Data } }
-            ]
-        }]
+        model: "gpt-4o-mini",
+        messages: [
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: prompt },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:${mimeType};base64,${base64Data}`
+                        }
+                    }
+                ]
+            }
+        ],
+        max_tokens: 500
     };
 
     const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+        },
         body: JSON.stringify(body)
     });
     
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "No description returned.";
+    return data.choices[0].message.content || "No description returned.";
 }
 
 document.getElementById('startbattle').onclick = async () => {
     const file = document.getElementById('battleupload').files[0];
     if (!file) return;
     
-    const gKey = localStorage.getItem('gemini_key');
+    const oKey = localStorage.getItem('openai_key');
     const zip = await JSZip.loadAsync(file);
     
     const imageFiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
@@ -62,12 +74,12 @@ document.getElementById('startbattle').onclick = async () => {
         return;
     }
 
-    const logEl = document.getElementById('g_output');
-    const statusEl = document.getElementById('g_status_2');
-    const parsedEl = document.getElementById('g_parsed');
-    const debugBox = document.getElementById('g_prompt');
+    const logEl = document.getElementById('o_output'); // Right side output
+    const statusEl = document.getElementById('o_status_2'); // Right side status
+    const parsedEl = document.getElementById('o_parsed'); // Right side parsed
+    const debugBox = document.getElementById('o_prompt'); // Right side prompt
     
-    if (logEl) logEl.value = "Starting Full Inventory...\n";
+    if (logEl) logEl.value = "Starting OpenAI Image Inventory...\n";
     let inventory = [];
 
     for (const path of imageFiles) {
@@ -80,14 +92,14 @@ document.getElementById('startbattle').onclick = async () => {
             const base64Data = await getBase64(imgBlob);
             const mimeType = imgBlob.type || "image/jpeg";
             
-            const description = await callGeminiVision(base64Data, mimeType, gKey);
+            const description = await callOpenAIVision(base64Data, mimeType, oKey);
             
             inventory.push({
                 file: filename,
                 description: description
             });
 
-            // Update display real-time
+            // Update right-hand display
             if (logEl) logEl.value += `DONE: ${filename}\n`;
             if (parsedEl) parsedEl.value = JSON.stringify(inventory, null, 2);
 
