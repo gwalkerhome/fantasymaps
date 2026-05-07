@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.3 | map test station</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .map-wrapper {
+            position: relative;
+            display: inline-block;
+            margin: 20px auto;
+            border: 3px solid var(--earth-brown);
+            background: #eee;
+            cursor: crosshair;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        #map-image { display: block; max-width: 100%; height: auto; user-select: none; }
+        #map-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        /* Style for current drawing line */
+        #active-line { stroke: var(--gold-leaf); stroke-width: 0.5; fill: none; stroke-dasharray: 2, 2; }
+        
+        .grid-line { stroke: rgba(0, 0, 0, 0.1); stroke-width: 0.1; }
+        .marker-polygon { fill: rgba(106, 153, 78, 0.4); stroke: var(--deep-forest); stroke-width: 0.2; }
+        .marker-path { fill: none; stroke: var(--earth-brown); stroke-width: 0.4; stroke-linejoin: round; stroke-linecap: round; }
+        .marker-point { fill: var(--gold-leaf); stroke: white; stroke-width: 0.5; }
+
+        .toolbar {
+            background: var(--aged-parchment);
+            padding: 15px;
+            border: 2px solid var(--earth-brown);
+            margin-bottom: 10px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .tool-group { display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--earth-brown); padding-right: 15px; }
+        .tool-group:last-child { border-right: none; }
+
+        .coord-display {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--earth-brown);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            z-index: 100;
+        }
+
+        .btn.active { background-color: var(--moss-green); outline: 2px solid var(--iron-ink); }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 1400px;">
+        <div class="back-nav">
+            <a href="aicomparison.html" class="btn secondary">← back to arena</a>
+        </div>
+        
+        <h1 style="text-align: center;">cartographer's lightbox <span id="version-badge">v1.3</span></h1>
+
+        <div class="toolbar">
+            <div class="tool-group">
+                <label>Geography:</label>
+                <button class="btn tool" data-type="polygon" data-label="land">land</button>
+                <button class="btn tool" data-type="polygon" data-label="forest">forest</button>
+                <button class="btn tool" data-type="polygon" data-label="water">water</button>
+            </div>
+            <div class="tool-group">
+                <label>Features:</label>
+                <button class="btn tool" data-type="path" data-label="road">road</button>
+                <button class="btn tool" data-type="path" data-label="river">river</button>
+                <button class="btn tool" data-type="point" data-label="settlement">settlement</button>
+            </div>
+            <div class="tool-group">
+                <button id="clear-current" class="btn secondary">reset current</button>
+                <button id="save-map" class="btn">save to library</button>
+            </div>
+        </div>
+
+        <div style="text-align: center;">
+            <div class="map-wrapper" id="map-container">
+                <img id="map-image" src="" alt="Load map from arena">
+                <svg id="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <g id="grid-layer"></g>
+                    <g id="polygon-layer"></g>
+                    <g id="path-layer"></g>
+                    <g id="point-layer"></g>
+                    <polyline id="active-line" points=""></polyline>
+                </svg>
+            </div>
+        </div>
+
+        <div class="coord-display">
+            MODE: <span id="current-mode">None</span> | X: <span id="coord-x">0</span> | Y: <span id="coord-y">0</span>
+        </div>
+    </div>
+
+    <script type="module" src="overlay.js"></script>
+</body>
+</html>
