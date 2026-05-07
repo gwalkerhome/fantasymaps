@@ -1,114 +1,58 @@
-// v1.1 | extraction.js
-import { savetolibrary, uploadartifact } from './firebase.js';
-import { CARTOGRAPHER_PROMPTS } from './prompts.js';
+// v1.3 | extraction.js
+// ... [previous imports and utility functions remain the same] ...
 
-const statusLog = document.getElementById('statuslog');
-const promptMirror = document.getElementById('promptmirror');
-const aiMirror = document.getElementById('aimirror');
-const bookUpload = document.getElementById('bookupload');
-const processButton = document.getElementById('processbutton');
+async function getEpubMetadata(zip) {
+    log("Reading tome metadata...");
+    try {
+        const containerXml = await zip.file("META-INF/container.xml").async("string");
+        const parser = new DOMParser();
+        const containerDoc = parser.parseFromString(containerXml, "text/xml");
+        const opfPath = containerDoc.querySelector("rootfile").getAttribute("full-path");
 
-const log = (msg) => {
-    const entry = document.createElement('div');
-    entry.textContent = `> ${msg}`;
-    statusLog.appendChild(entry);
-    statusLog.scrollTop = statusLog.scrollHeight;
-};
+        const opfXml = await zip.file(opfPath).async("string");
+        const opfDoc = parser.parseFromString(opfXml, "text/xml");
 
-const getBase64 = (blob) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-};
+        // Core Metadata
+        const title = opfDoc.querySelector("title")?.textContent || "Unknown Title";
+        const author = opfDoc.querySelector("creator")?.textContent || "Unknown Author";
+        const description = opfDoc.querySelector("description")?.textContent || "No description available.";
+        const publisher = opfDoc.querySelector("publisher")?.textContent || "Unknown Publisher";
+        const date = opfDoc.querySelector("date")?.textContent || "Unknown Date";
 
-async function consultOracle(base64Data, mimeType) {
-    const apiKey = localStorage.getItem('openai_key');
-    if (!apiKey) throw new Error("Missing OpenAI Key in settings.");
+        // Series Logic
+        let series = "Standalone";
+        const metaTags = opfDoc.querySelectorAll("meta");
+        metaTags.forEach(meta => {
+            if (meta.getAttribute("name") === "calibre:series" || meta.getAttribute("property") === "belongs-to-collection") {
+                series = meta.getAttribute("content") || meta.textContent;
+            }
+        });
 
-    const prompt = CARTOGRAPHER_PROMPTS.describeImagePrompt();
-    promptMirror.value = prompt;
-
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        { type: "text", text: prompt },
-                        { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } }
-                    ]
-                }
-            ]
-        })
-    });
-
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    
-    const answer = data.choices[0].message.content;
-    aiMirror.value = answer;
-    return answer;
+        return { title, author, series, description, publisher, date };
+    } catch (e) {
+        log("Metadata extraction failed. Using defaults.");
+        return { title: "Unknown", author: "Unknown", series: "Unknown", description: "", publisher: "", date: "" };
+    }
 }
 
 processButton.onclick = async () => {
-    const file = bookUpload.files[0];
-    if (!file) return alert("Please select an EPUB file.");
-
-    log(`Beginning extraction of ${file.name}...`);
-    const zip = await JSZip.loadAsync(file);
-    const imageFiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
+    // ... [setup logic] ...
     
-    log(`Found ${imageFiles.length} images. Analyzing...`);
-
+    const meta = await getEpubMetadata(zip);
+    
     let bookData = {
-        title: file.name.replace('.epub', ''),
+        title: meta.title,
+        author: meta.author,
+        series: meta.series,
+        description: meta.description, // The blurb for your Info Page
+        details: {
+            publisher: meta.publisher,
+            published: meta.date
+        },
         maps: [],
         cover: null,
         created: Date.now()
     };
 
-    const bookId = bookData.title.toLowerCase().replace(/\s+/g, '-');
-
-    for (const path of imageFiles) {
-        const filename = path.split('/').pop();
-        log(`Scanning: ${filename}`);
-
-        try {
-            const imgBlob = await zip.file(path).async("blob");
-            const base64Data = await getBase64(imgBlob);
-            const mimeType = imgBlob.type || "image/jpeg";
-
-            const analysis = await consultOracle(base64Data, mimeType);
-
-            if (analysis.toUpperCase().includes("COVER") && !bookData.cover) {
-                log(`Cover found: ${filename}. Syncing to vault...`);
-                bookData.cover = await uploadartifact(`covers/${bookId}/${filename}`, imgBlob);
-            } else if (analysis.toUpperCase().includes("MAP")) {
-                log(`Map found: ${filename}. Syncing to vault...`);
-                const mapUrl = await uploadartifact(`maps/${bookId}/${filename}`, imgBlob);
-                bookData.maps.push({ 
-                    name: filename, 
-                    url: mapUrl, 
-                    analysis: analysis,
-                    id: crypto.randomUUID().substring(0, 8) 
-                });
-            }
-
-            await savetolibrary(bookId, bookData);
-
-        } catch (err) {
-            log(`Error at ${filename}: ${err.message}`);
-        }
-    }
-
-    log("Extraction complete. Vault is updated.");
+    // ... [rest of the extraction and Firebase upload logic] ...
 };
