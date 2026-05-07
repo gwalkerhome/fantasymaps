@@ -1,7 +1,7 @@
-// v2.7 | battlemaster.js
+// v2.8 | battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = "v2.7";
+const VERSION = "v2.8";
 
 const updateBadge = () => {
     const badge = document.getElementById('version-badge');
@@ -14,7 +14,6 @@ if (document.readyState === 'loading') {
     updateBadge();
 }
 
-// Helper to convert file to Base64 for Vision tasks
 const toBase64 = file => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -24,54 +23,39 @@ const toBase64 = file => new Promise((resolve, reject) => {
 
 async function describeImage(base64Data, filename, key) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-    const prompt = CARTOGRAPHER_PROMPTS.buildImageDescriptionPrompt(filename);
+    const promptText = CARTOGRAPHER_PROMPTS.buildImageDescriptionPrompt(filename);
     
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{
-                parts: [
-                    { text: prompt },
-                    { inline_data: { mime_type: "image/jpeg", data: base64Data } }
-                ]
-            }]
-        })
-    });
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "No description generated.";
-}
+    // Update the debug box so you can see the prompt
+    const debugBox = document.getElementById('g_prompt');
+    if (debugBox) debugBox.value = promptText;
 
-document.getElementById('startbattle').onclick = async () => {
-    const file = document.getElementById('battleupload').files[0];
-    if (!file) return;
-    
-    const zip = await JSZip.loadAsync(file);
-    const imagePaths = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
-    const gKey = localStorage.getItem('gemini_key');
-    
-    const inventory = [];
-    const logEl = document.getElementById('g_output');
-    if (logEl) logEl.value = "Starting Image Inventory...\n";
-
-    for (const path of imagePaths) {
-        const filename = path.split('/').pop();
-        if (logEl) logEl.value += `Analyzing: ${filename}...\n`;
-        
-        const imgBlob = await zip.file(path).async("blob");
-        const b64 = await toBase64(imgBlob);
-        
-        const descriptionRaw = await describeImage(b64, filename, gKey);
-        
-        // We will parse the AI's response into our Inventory
-        inventory.push({
-            file: filename,
-            path: path,
-            analysis: descriptionRaw
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        { text: promptText },
+                        { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+                    ]
+                }],
+                generationConfig: { temperature: 0.1 }
+            })
         });
-    }
+        
+        const data = await res.json();
+        
+        if (data.error) {
+            return `API ERROR: ${data.error.message}`;
+        }
+        
+        const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return textResponse ? textResponse.replace(/
+http://googleusercontent.com/immersive_entry_chip/0
 
-    // Display the final inventory for review
-    document.getElementById('g_parsed').value = JSON.stringify(inventory, null, 2);
-    if (logEl) logEl.value += "\nInventory Complete.";
-};
+**What to look for now:**
+* If the `analysis` still says "FETCH ERROR" or "API ERROR," check the `g_output` box for the specific message. 
+* The `g_prompt` box should now show the text instructions I wrote in **prompts.js**.
+
+Please update both files and let's see if we can get the AI to actually describe the images this time.
