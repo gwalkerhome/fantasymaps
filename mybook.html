@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.0 | mybook</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .book-detail {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 30px;
+            align-items: start;
+            margin-top: 20px;
+        }
+        .cover-frame {
+            width: 100%;
+            aspect-ratio: 2 / 3;
+            background: var(--earth-brown);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--aged-parchment);
+            box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        .cover-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .meta-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+        .meta-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(106, 79, 75, 0.25);
+        }
+        .meta-list .label {
+            display: inline-block;
+            min-width: 80px;
+            font-weight: 700;
+            color: var(--earth-brown);
+            text-transform: uppercase;
+            font-size: 0.8em;
+            letter-spacing: 1px;
+            margin-right: 10px;
+        }
+        .action-row {
+            margin-top: 25px;
+            display: flex;
+            gap: 25px;
+            flex-wrap: wrap;
+        }
+        .action-cell {
+            display: flex;
+            flex-direction: column;
+        }
+        .coming-soon {
+            font-size: 0.7em;
+            font-style: italic;
+            color: var(--earth-brown);
+            margin-top: 6px;
+            text-align: center;
+        }
+        @media (max-width: 600px) {
+            .book-detail {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="back-nav" style="margin-bottom: 20px;">
+            <a href="index.html" class="btn secondary">← library</a>
+        </div>
+
+        <h1 id="book-title">loading tome...</h1>
+
+        <div id="book-content">
+            <p style="text-align: center;">consulting the vault...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db } from './firebase.js';
+        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        function getParam(name) {
+            return new URLSearchParams(window.location.search).get(name);
+        }
+
+        async function loadBook() {
+            const userid = getParam('u');
+            const author = getParam('a');
+            const series = getParam('s');
+            const bookid = getParam('b');
+
+            const titleEl = document.getElementById('book-title');
+            const contentEl = document.getElementById('book-content');
+
+            if (!userid || !author || !series || !bookid) {
+                titleEl.textContent = "missing book reference";
+                contentEl.innerHTML = '<p style="text-align:center;">this page needs u, a, s and b parameters in the url. <a href="index.html">return to the library</a>.</p>';
+                return;
+            }
+
+            try {
+                const bookRef = doc(db, "users", userid, "authors", author, "series", series, "books", bookid);
+                const snap = await getDoc(bookRef);
+
+                if (!snap.exists()) {
+                    titleEl.textContent = "tome not found";
+                    contentEl.innerHTML = '<p style="text-align:center;">no record matches that book reference. <a href="index.html">return to the library</a>.</p>';
+                    return;
+                }
+
+                const book = snap.data();
+                titleEl.textContent = book.title || bookid;
+
+                const mapsCount = Array.isArray(book.maps) ? book.maps.length : 0;
+                const params = `?u=${userid}&a=${author}&s=${series}&b=${bookid}`;
+                const accompanyHref = `companion.html${params}`;
+                const overlayHref = `mapgen.html${params}`;
+
+                contentEl.innerHTML = `
+                    <div class="book-detail">
+                        <div class="cover-frame">
+                            ${book.cover
+                                ? `<img src="${book.cover}" alt="${book.title}">`
+                                : `<span>no cover</span>`
+                            }
+                        </div>
+                        <div>
+                            <ul class="meta-list">
+                                <li><span class="label">author</span>${book.author || '—'}</li>
+                                <li><span class="label">series</span>${book.series || '—'}</li>
+                                <li><span class="label">maps</span>${mapsCount}</li>
+                            </ul>
+                            <div class="action-row">
+                                <div class="action-cell">
+                                    <a href="${accompanyHref}" class="btn">accompany me</a>
+                                    <div class="coming-soon">companion view — coming soon</div>
+                                </div>
+                                <div class="action-cell">
+                                    <a href="${overlayHref}" class="btn secondary">edit map overlay</a>
+                                    <div class="coming-soon">mapgen — coming soon</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                console.error(err);
+                titleEl.textContent = "error loading tome";
+                contentEl.innerHTML = `<p style="text-align:center;">${err.message}</p>`;
+            }
+        }
+
+        window.onload = loadBook;
+    </script>
+</body>
+</html>
