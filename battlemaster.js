@@ -1,7 +1,7 @@
-// v2.6 | battlemaster.js
+// v2.7 | battlemaster.js
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = "v2.6";
+const VERSION = "v2.7";
 
 const updateBadge = () => {
     const badge = document.getElementById('version-badge');
@@ -15,7 +15,8 @@ if (document.readyState === 'loading') {
 }
 
 async function callGeminiVision(base64Data, mimeType, key) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+    // Switching back to 2.5-flash to utilize your higher quota
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
     const prompt = CARTOGRAPHER_PROMPTS.describeImagePrompt();
 
     const body = {
@@ -45,15 +46,14 @@ document.getElementById('startbattle').onclick = async () => {
     const gKey = localStorage.getItem('gemini_key');
     const zip = await JSZip.loadAsync(file);
     
-    // 1. Recognize: Find images
     const imageFiles = Object.keys(zip.files).filter(f => f.match(/\.(jpg|jpeg|png)$/i));
     
     if (imageFiles.length === 0) {
-        document.getElementById('battlelog').innerText = "No images found in this EPUB.";
+        document.getElementById('battlelog').innerText = "No images found.";
         return;
     }
 
-    // 2. Extract: Grab the first image and convert to Base64
+    // Still sticking to Goal A: Extracting the first image for visual description
     const targetPath = imageFiles[0];
     const imgBlob = await zip.file(targetPath).async("blob");
     const reader = new FileReader();
@@ -62,16 +62,16 @@ document.getElementById('startbattle').onclick = async () => {
         const base64Data = reader.result.split(',')[1];
         const mimeType = imgBlob.type || "image/jpeg";
         
-        document.getElementById('g_prompt').value = `[Image Data Sent: ${targetPath}]`;
-        document.getElementById('g_status_2').innerText = "Analyzing image...";
+        document.getElementById('g_prompt').value = `[Vision Request: ${targetPath}]`;
+        document.getElementById('g_status_2').innerText = "Analyzing image with 2.5-Flash...";
 
         try {
-            // 3. Describe: Get the vision analysis
             const description = await callGeminiVision(base64Data, mimeType, gKey);
             document.getElementById('g_output').value = description;
             document.getElementById('g_status_2').innerText = "Analysis Complete.";
         } catch (err) {
             document.getElementById('g_output').value = "Error: " + err.message;
+            document.getElementById('g_status_2').innerText = "Quota/Connection Error.";
         }
     };
     
