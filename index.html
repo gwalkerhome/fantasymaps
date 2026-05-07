@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.4 | high fantasy companion - library</title>
+    <title>v1.5 | high fantasy companion - library</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -62,7 +62,7 @@
 
     <div class="container">
         <h1>high fantasy companion</h1>
-        
+
         <div style="text-align: center; margin-bottom: 40px; border-bottom: 1px solid var(--moss-green); padding-bottom: 20px;">
             <a href="scribe.html" class="btn">add new tome to vault</a>
         </div>
@@ -83,11 +83,11 @@
         async function refreshlibrary() {
             const content = document.getElementById('library-content');
             const userid = "default-user";
-            
+
             try {
                 // Fetch all authors for this user
                 const authorsSnap = await getDocs(collection(db, "users", userid, "authors"));
-                
+
                 if (authorsSnap.empty) {
                     content.innerHTML = '<p style="text-align: center;">the shelves are currently bare.</p>';
                     return;
@@ -97,17 +97,17 @@
 
                 for (const authorDoc of authorsSnap.docs) {
                     const authorName = authorDoc.id;
-                    
+
                     // Fetch all series for this author
                     const seriesSnap = await getDocs(collection(db, "users", userid, "authors", authorName, "series"));
-                    
+
                     for (const seriesDoc of seriesSnap.docs) {
                         const seriesTitle = seriesDoc.id;
-                        
+
                         // Create a section for this series
                         const seriesSection = document.createElement('div');
                         seriesSection.className = 'series-container';
-                        
+
                         const displaySeriesName = seriesTitle.replace(/-/g, ' ');
                         const displayAuthorName = authorName.replace(/-/g, ' ');
 
@@ -124,15 +124,15 @@
                         grid.innerHTML = booksSnap.docs.map(bookDoc => {
                             const book = bookDoc.data();
                             const bookPath = `?u=${userid}&a=${authorName}&s=${seriesTitle}&b=${bookDoc.id}`;
-                            
+
                             return `
                                 <div class="book-card">
-                                    ${book.cover 
+                                    ${book.cover
                                         ? `<img src="${book.cover}" class="cover-preview" alt="${book.title}">`
                                         : `<div class="cover-preview">No Cover Found</div>`
                                     }
                                     <strong style="display: block; margin-bottom: 10px; font-family: 'Cinzel', serif; font-size: 0.9em;">${book.title}</strong>
-                                    <a href="map.html${bookPath}" class="btn" style="font-size: 0.7em; padding: 8px 15px;">open map</a>
+                                    <a href="mybook.html${bookPath}" class="btn" style="font-size: 0.7em; padding: 8px 15px;">open book</a>
                                 </div>
                             `;
                         }).join('');
