@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.0 | map test station</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .map-wrapper {
+            position: relative;
+            display: inline-block;
+            margin: 20px auto;
+            border: 3px solid var(--earth-brown);
+            background: #eee;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        #map-image {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            user-select: none;
+        }
+
+        #map-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Let clicks pass to wrapper for coord tracking */
+        }
+
+        .grid-line {
+            stroke: rgba(0, 0, 0, 0.1);
+            stroke-width: 0.1;
+        }
+
+        .marker-point {
+            fill: #ff4444;
+            stroke: white;
+            stroke-width: 0.5;
+        }
+
+        .marker-polygon {
+            fill: rgba(76, 175, 80, 0.3);
+            stroke: #4caf50;
+            stroke-width: 0.3;
+        }
+
+        .coord-display {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--earth-brown);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            z-index: 100;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            margin: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid var(--earth-brown);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 1200px;">
+        <div class="back-nav">
+            <a href="aicomparison.html" class="btn secondary">← back to arena</a>
+        </div>
+        
+        <h1 style="text-align: center;">cartographer's lightbox <span id="version-badge">v1.0</span></h1>
+
+        <div class="controls">
+            <input type="file" id="map-upload" accept="image/*">
+            <button id="toggle-grid" class="btn">toggle grid</button>
+            <span id="map-status">Upload a map to begin calibration...</span>
+        </div>
+
+        <div class="map-wrapper" id="map-container">
+            <img id="map-image" src="" alt="">
+            <svg id="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <g id="grid-group"></g>
+                <g id="polygon-group"></g>
+                <g id="path-group"></g>
+                <g id="point-group"></g>
+            </svg>
+        </div>
+
+        <div class="coord-display">
+            X: <span id="coord-x">0</span> | Y: <span id="coord-y">0</span>
+        </div>
+    </div>
+
+    <script>
+        const mapContainer = document.getElementById('map-container');
+        const mapImage = document.getElementById('map-image');
+        const mapSvg = document.getElementById('map-svg');
+        const gridGroup = document.getElementById('grid-group');
+        const coordX = document.getElementById('coord-x');
+        const coordY = document.getElementById('coord-y');
+
+        // Initial Grid Setup
+        function drawGrid() {
+            gridGroup.innerHTML = '';
+            for (let i = 0; i <= 100; i += 10) {
+                // Vertical lines
+                const vLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                vLine.setAttribute("x1", i); vLine.setAttribute("y1", 0);
+                vLine.setAttribute("x2", i); vLine.setAttribute("y2", 100);
+                vLine.classList.add('grid-line');
+                gridGroup.appendChild(vLine);
+
+                // Horizontal lines
+                const hLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                hLine.setAttribute("x1", 0); hLine.setAttribute("y1", i);
+                hLine.setAttribute("x2", 100); hLine.setAttribute("y2", i);
+                hLine.classList.add('grid-line');
+                gridGroup.appendChild(hLine);
+            }
+        }
+
+        document.getElementById('map-upload').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                mapImage.src = event.target.result;
+                document.getElementById('map-status').innerText = `Calibrated: ${file.name}`;
+                drawGrid();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        mapContainer.onmousemove = (e) => {
+            const rect = mapContainer.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            coordX.innerText = Math.round(x);
+            coordY.innerText = Math.round(y);
+        };
+
+        document.getElementById('toggle-grid').onclick = () => {
+            gridGroup.style.display = gridGroup.style.display === 'none' ? 'block' : 'none';
+        };
+
+    </script>
+</body>
+</html>
