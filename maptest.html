@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.0 | map test station</title>
+    <title>v1.1 | map test station</title>
     <link rel="stylesheet" href="style.css">
     <style>
         .map-wrapper {
@@ -14,6 +14,7 @@
             background: #eee;
             cursor: crosshair;
             overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
         #map-image {
@@ -29,25 +30,15 @@
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* Let clicks pass to wrapper for coord tracking */
+            pointer-events: none;
         }
 
-        .grid-line {
-            stroke: rgba(0, 0, 0, 0.1);
-            stroke-width: 0.1;
-        }
-
-        .marker-point {
-            fill: #ff4444;
-            stroke: white;
-            stroke-width: 0.5;
-        }
-
-        .marker-polygon {
-            fill: rgba(76, 175, 80, 0.3);
-            stroke: #4caf50;
-            stroke-width: 0.3;
-        }
+        .grid-line { stroke: rgba(0, 0, 0, 0.15); stroke-width: 0.1; }
+        .marker-point { fill: #ff4444; stroke: white; stroke-width: 0.5; cursor: pointer; pointer-events: auto; }
+        .marker-polygon { fill: rgba(76, 175, 80, 0.3); stroke: #4caf50; stroke-width: 0.3; }
+        .marker-path { fill: none; stroke: #2196f3; stroke-width: 0.5; stroke-dasharray: 1, 1; }
+        
+        .label-text { font-family: 'Cinzel', serif; font-size: 2px; fill: var(--iron-ink); paint-order: stroke; stroke: #fff; stroke-width: 0.2; }
 
         .coord-display {
             position: fixed;
@@ -59,17 +50,17 @@
             border-radius: 5px;
             font-family: monospace;
             z-index: 100;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
 
         .controls {
             margin: 20px;
             padding: 15px;
-            background: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.7);
             border: 1px solid var(--earth-brown);
             display: flex;
             gap: 10px;
             align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
@@ -79,15 +70,15 @@
             <a href="aicomparison.html" class="btn secondary">← back to arena</a>
         </div>
         
-        <h1 style="text-align: center;">cartographer's lightbox <span id="version-badge">v1.0</span></h1>
+        <h1 style="text-align: center;">cartographer's lightbox <span id="version-badge">v1.1</span></h1>
 
         <div class="controls">
-            <input type="file" id="map-upload" accept="image/*">
-            <button id="toggle-grid" class="btn">toggle grid</button>
-            <span id="map-status">Upload a map to begin calibration...</span>
+            <button id="load-stored" class="btn">load ai mapping</button>
+            <button id="toggle-grid" class="btn secondary">toggle grid</button>
+            <span id="map-status">Waiting for data...</span>
         </div>
 
-        <div class="map-wrapper" id="map-container">
+        <div class="map-wrapper" id="map-container" style="display:none;">
             <img id="map-image" src="" alt="">
             <svg id="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
                 <g id="grid-group"></g>
@@ -105,23 +96,21 @@
     <script>
         const mapContainer = document.getElementById('map-container');
         const mapImage = document.getElementById('map-image');
-        const mapSvg = document.getElementById('map-svg');
         const gridGroup = document.getElementById('grid-group');
-        const coordX = document.getElementById('coord-x');
-        const coordY = document.getElementById('coord-y');
+        const pointGroup = document.getElementById('point-group');
+        const polyGroup = document.getElementById('polygon-group');
+        const pathGroup = document.getElementById('path-group');
+        const status = document.getElementById('map-status');
 
-        // Initial Grid Setup
         function drawGrid() {
             gridGroup.innerHTML = '';
             for (let i = 0; i <= 100; i += 10) {
-                // Vertical lines
                 const vLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 vLine.setAttribute("x1", i); vLine.setAttribute("y1", 0);
                 vLine.setAttribute("x2", i); vLine.setAttribute("y2", 100);
                 vLine.classList.add('grid-line');
                 gridGroup.appendChild(vLine);
 
-                // Horizontal lines
                 const hLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 hLine.setAttribute("x1", 0); hLine.setAttribute("y1", i);
                 hLine.setAttribute("x2", 100); hLine.setAttribute("y2", i);
@@ -130,31 +119,84 @@
             }
         }
 
-        document.getElementById('map-upload').onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                mapImage.src = event.target.result;
-                document.getElementById('map-status').innerText = `Calibrated: ${file.name}`;
+        function renderMapping(data) {
+            pointGroup.innerHTML = '';
+            polyGroup.innerHTML = '';
+            pathGroup.innerHTML = '';
+
+            // Render Points (Cities/Keeps)
+            data.points?.forEach(p => {
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", p.x);
+                circle.setAttribute("cy", p.y);
+                circle.setAttribute("r", 0.8);
+                circle.classList.add('marker-point');
+                
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("x", p.x + 1);
+                text.setAttribute("y", p.y - 1);
+                text.textContent = p.name;
+                text.classList.add('label-text');
+                
+                pointGroup.appendChild(circle);
+                pointGroup.appendChild(text);
+            });
+
+            // Render Polygons (Forests/Regions)
+            data.polygons?.forEach(poly => {
+                const p = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+                const pointsStr = poly.coords.map(c => c.join(',')).join(' ');
+                p.setAttribute("points", pointsStr);
+                p.classList.add('marker-polygon');
+                polyGroup.appendChild(p);
+            });
+
+            // Render Paths (Rivers/Roads)
+            data.paths?.forEach(path => {
+                const p = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+                const pointsStr = path.coords.map(c => c.join(',')).join(' ');
+                p.setAttribute("points", pointsStr);
+                p.classList.add('marker-path');
+                pathGroup.appendChild(p);
+            });
+        }
+
+        document.getElementById('load-stored').onclick = () => {
+            const rawData = localStorage.getItem('active_map_data');
+            const imgData = localStorage.getItem('active_map_image');
+
+            if (!rawData || !imgData) {
+                status.innerText = "No map data found in storage.";
+                return;
+            }
+
+            try {
+                // OpenAI sometimes wraps JSON in markdown blocks
+                const cleanJson = rawData.replace(/```json|```/g, "").trim();
+                const data = JSON.parse(cleanJson);
+                
+                mapImage.src = imgData;
+                mapContainer.style.display = 'inline-block';
                 drawGrid();
-            };
-            reader.readAsDataURL(file);
+                renderMapping(data);
+                status.innerText = `Displaying: ${data.map_name || 'Extracted Map'}`;
+            } catch (e) {
+                status.innerText = "Error parsing AI data.";
+                console.error(e);
+            }
         };
 
         mapContainer.onmousemove = (e) => {
             const rect = mapContainer.getBoundingClientRect();
             const x = ((e.clientX - rect.left) / rect.width) * 100;
             const y = ((e.clientY - rect.top) / rect.height) * 100;
-            
-            coordX.innerText = Math.round(x);
-            coordY.innerText = Math.round(y);
+            document.getElementById('coord-x').innerText = Math.round(x);
+            document.getElementById('coord-y').innerText = Math.round(y);
         };
 
         document.getElementById('toggle-grid').onclick = () => {
             gridGroup.style.display = gridGroup.style.display === 'none' ? 'block' : 'none';
         };
-
     </script>
 </body>
 </html>
