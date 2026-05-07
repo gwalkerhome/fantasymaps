@@ -1,21 +1,19 @@
-// v1.9 | prompts.js
+// v1.10 | prompts.js
 
 export const CARTOGRAPHER_PROMPTS = {
-    buildImageDescriptionPrompt: (filename) => {
+    // This is the prompt that worked for the single image description
+    describeImagePrompt: () => {
         return `
-            Analyze this image from a book (Filename: ${filename}).
+            You are a Master Cartographer. 
+            Analyze this image extracted from a fantasy book.
             
             TASK:
-            1. Describe the visual content in detail. 
-            2. If it is a map, describe the landmarks, terrain, and labels visible.
-            3. Categorize the image into one of these types: [MAP, COVER, ILLUSTRATION, ICON, TEXT_BOX].
+            1. Describe the visual content in detail.
+            2. Categorize the image: Is it a [MAP, COVER, ILLUSTRATION, or ICON]?
+            3. Identify any text or labels visible in the image.
             
-            OUTPUT FORMAT (JSON ONLY):
-            {
-              "category": "TYPE",
-              "description": "Detailed visual summary",
-              "labels_found": ["List", "of", "visible", "text", "on", "image"]
-            }
+            OUTPUT:
+            Provide a clear, concise description and the category.
         `.trim();
     }
 };
