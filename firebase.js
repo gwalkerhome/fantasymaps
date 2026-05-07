@@ -1,4 +1,4 @@
-// firebase.js - library postmaster v1.1
+// firebase.js - library postmaster v1.2
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
@@ -16,32 +16,47 @@ const app = initializeApp(firebaseconfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// utility to save data to firestore
-export async function savetolibrary(bookid, data) {
+/**
+ * Saves a book into the hierarchical structure.
+ * Path: users -> author -> series -> book
+ */
+export async function savetolibrary(metadata, bookData) {
     try {
-        await setDoc(doc(db, "library", bookid), data, { merge: true });
-        console.log(`synced: ${bookid}`);
+        const { userid, author, series, bookid } = metadata;
+        
+        // Construct the nested document reference
+        const bookRef = doc(db, 
+            "users", userid, 
+            "authors", author, 
+            "series", series, 
+            "books", bookid
+        );
+
+        await setDoc(bookRef, bookData, { merge: true });
+        console.log(`synced to vault: ${series} - ${bookid}`);
     } catch (e) {
-        console.error("sync error: ", e);
+        console.error("hierarchy sync error: ", e);
     }
 }
 
-// utility to upload a file (like a cover) to storage
+// Utility to upload files remains similar but path-aware
 export async function uploadartifact(path, file) {
     try {
         const storageref = ref(storage, path);
         await uploadBytes(storageref, file);
-        const url = await getDownloadURL(storageref);
-        return url;
+        return await getDownloadURL(storageref);
     } catch (e) {
         console.error("upload error: ", e);
         return null;
     }
 }
 
-export async function fetchlibrary() {
+// Note: fetchlibrary will now need a specific path or collectionGroup query 
+// to pull books for a specific series.
+export async function fetchseriesbooks(userid, author, series) {
     try {
-        const querysnapshot = await getDocs(collection(db, "library"));
+        const colPath = collection(db, "users", userid, "authors", author, "series", series, "books");
+        const querysnapshot = await getDocs(colPath);
         return querysnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (e) {
         console.error("fetch error: ", e);
