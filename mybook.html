@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.0 | mybook</title>
+    <title>v1.1 | mybook</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -15,6 +15,12 @@
             gap: 30px;
             align-items: start;
             margin-top: 20px;
+        }
+        .cover-col {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
         }
         .cover-frame {
             width: 100%;
@@ -69,10 +75,77 @@
             margin-top: 6px;
             text-align: center;
         }
+
+        /* ── Cover picker modal ─────────────────────────────────────────────── */
+        #cover-modal-overlay {
+            display: none;
+            position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0,0,0,0.55);
+            align-items: center; justify-content: center;
+        }
+        #cover-modal-overlay.open { display: flex; }
+        #cover-modal-box {
+            background: var(--aged-parchment);
+            border: 2px solid var(--earth-brown);
+            border-radius: 6px;
+            padding: 22px 24px;
+            width: 92%; max-width: 560px;
+            max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        .cm-title {
+            font-family: 'Cinzel', serif;
+            font-size: 0.82em; font-weight: 700;
+            color: var(--earth-brown);
+            text-transform: uppercase; letter-spacing: 0.08em;
+            margin: 0 0 14px;
+        }
+        .cm-section-label {
+            font-size: 0.78em; font-weight: 700;
+            color: var(--earth-brown);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            margin: 14px 0 8px;
+        }
+        .cm-thumb-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .cm-thumb {
+            aspect-ratio: 2/3;
+            object-fit: cover;
+            border: 2px solid transparent;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: border-color 0.15s, opacity 0.15s;
+            width: 100%;
+            display: block;
+        }
+        .cm-thumb:hover   { border-color: var(--earth-brown); }
+        .cm-thumb.selected { border-color: var(--moss-green); outline: 2px solid var(--moss-green); }
+        .cm-upload-row {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 8px; flex-wrap: wrap;
+        }
+        .cm-upload-name {
+            font-size: 0.8em; font-style: italic;
+            color: var(--earth-brown); flex: 1;
+        }
+        .cm-status {
+            font-size: 0.8em; font-style: italic;
+            color: var(--earth-brown); margin-top: 10px;
+            min-height: 1.2em;
+        }
+        .cm-buttons {
+            display: flex; gap: 8px; justify-content: flex-end;
+            margin-top: 16px;
+            border-top: 1px solid rgba(106,79,75,0.2);
+            padding-top: 14px;
+        }
+
         @media (max-width: 600px) {
-            .book-detail {
-                grid-template-columns: 1fr;
-            }
+            .book-detail { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -90,21 +163,54 @@
         </div>
     </div>
 
+    <!-- ── Cover picker modal ──────────────────────────────────────────────── -->
+    <div id="cover-modal-overlay">
+        <div id="cover-modal-box">
+            <div class="cm-title">Change Cover Image</div>
+
+            <div class="cm-section-label">Pick from stored images</div>
+            <div class="cm-thumb-grid" id="cm-thumb-grid">
+                <em style="font-size:0.82em; color:#888;">loading…</em>
+            </div>
+
+            <div class="cm-section-label">Or upload your own</div>
+            <div class="cm-upload-row">
+                <button class="btn secondary" id="cm-choose-btn">Choose image…</button>
+                <span class="cm-upload-name" id="cm-upload-name">No file chosen</span>
+            </div>
+            <input type="file" id="cm-file-input" accept="image/*" style="display:none">
+
+            <div class="cm-status" id="cm-status"></div>
+
+            <div class="cm-buttons">
+                <button class="btn" id="cm-save-btn" disabled>Save Cover</button>
+                <button class="btn secondary" id="cm-cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
-        import { db } from './firebase.js';
-        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { db, uploadartifact } from './firebase.js';
+        import {
+            doc, getDoc, updateDoc
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         function getParam(name) {
             return new URLSearchParams(window.location.search).get(name);
         }
 
-        async function loadBook() {
-            const userid = getParam('u');
-            const author = getParam('a');
-            const series = getParam('s');
-            const bookid = getParam('b');
+        const userid = getParam('u');
+        const author = getParam('a');
+        const series = getParam('s');
+        const bookid = getParam('b');
 
-            const titleEl = document.getElementById('book-title');
+        let bookData      = null;
+        let selectedUrl   = null;   // url chosen from thumbnails
+        let uploadFile    = null;   // file chosen for upload
+
+        // ── Load and render the book page ─────────────────────────────────────
+        async function loadBook() {
+            const titleEl   = document.getElementById('book-title');
             const contentEl = document.getElementById('book-content');
 
             if (!userid || !author || !series || !bookid) {
@@ -115,7 +221,7 @@
 
             try {
                 const bookRef = doc(db, "users", userid, "authors", author, "series", series, "books", bookid);
-                const snap = await getDoc(bookRef);
+                const snap    = await getDoc(bookRef);
 
                 if (!snap.exists()) {
                     titleEl.textContent = "tome not found";
@@ -123,47 +229,161 @@
                     return;
                 }
 
-                const book = snap.data();
-                titleEl.textContent = book.title || bookid;
+                bookData = snap.data();
+                titleEl.textContent = bookData.title || bookid;
 
-                const mapsCount = Array.isArray(book.maps) ? book.maps.length : 0;
-                const params = `?u=${userid}&a=${author}&s=${series}&b=${bookid}`;
-                const accompanyHref = `companion.html${params}`;
-                const overlayHref = `mapgen.html${params}`;
+                renderBookContent(bookData);
 
-                contentEl.innerHTML = `
-                    <div class="book-detail">
-                        <div class="cover-frame">
+            } catch (err) {
+                console.error(err);
+                document.getElementById('book-title').textContent = "error loading tome";
+                document.getElementById('book-content').innerHTML = `<p style="text-align:center;">${err.message}</p>`;
+            }
+        }
+
+        function renderBookContent(book) {
+            const mapsCount = Array.isArray(book.maps) ? book.maps.length : 0;
+            const params    = `?u=${userid}&a=${author}&s=${series}&b=${bookid}`;
+
+            document.getElementById('book-content').innerHTML = `
+                <div class="book-detail">
+                    <div class="cover-col">
+                        <div class="cover-frame" id="cover-frame">
                             ${book.cover
-                                ? `<img src="${book.cover}" alt="${book.title}">`
-                                : `<span>no cover</span>`
+                                ? `<img id="cover-img" src="${book.cover}" alt="${book.title}">`
+                                : `<span id="cover-img">no cover</span>`
                             }
                         </div>
-                        <div>
-                            <ul class="meta-list">
-                                <li><span class="label">author</span>${book.author || '—'}</li>
-                                <li><span class="label">series</span>${book.series || '—'}</li>
-                                <li><span class="label">maps</span>${mapsCount}</li>
-                            </ul>
-                            <div class="action-row">
-                                <div class="action-cell">
-                                    <a href="${accompanyHref}" class="btn">accompany me</a>
-                                    <div class="coming-soon">companion view — coming soon</div>
-                                </div>
-                                <div class="action-cell">
-                                    <a href="${overlayHref}" class="btn secondary">edit map overlay</a>
-                                    <div class="coming-soon">mapgen — coming soon</div>
-                                </div>
+                        <button class="btn secondary" id="change-cover-btn" style="font-size:0.78em; padding:5px 8px;">
+                            change cover
+                        </button>
+                    </div>
+                    <div>
+                        <ul class="meta-list">
+                            <li><span class="label">author</span>${book.author || '—'}</li>
+                            <li><span class="label">series</span>${book.series || '—'}</li>
+                            <li><span class="label">maps</span>${mapsCount}</li>
+                        </ul>
+                        <div class="action-row">
+                            <div class="action-cell">
+                                <a href="companion.html${params}" class="btn">accompany me</a>
+                                <div class="coming-soon">companion view — coming soon</div>
+                            </div>
+                            <div class="action-cell">
+                                <a href="mapgen.html${params}" class="btn secondary">edit map overlay</a>
                             </div>
                         </div>
                     </div>
-                `;
+                </div>
+            `;
+
+            document.getElementById('change-cover-btn').onclick = openCoverModal;
+        }
+
+        // ── Cover modal ────────────────────────────────────────────────────────
+        function openCoverModal() {
+            selectedUrl = null;
+            uploadFile  = null;
+            document.getElementById('cm-upload-name').textContent = 'No file chosen';
+            document.getElementById('cm-status').textContent = '';
+            document.getElementById('cm-save-btn').disabled = true;
+
+            // Build thumbnail grid from all stored images (maps + alternates)
+            const grid   = document.getElementById('cm-thumb-grid');
+            const images = [];
+
+            if (bookData && Array.isArray(bookData.maps)) {
+                bookData.maps.forEach((m, mi) => {
+                    if (m.url) images.push({ url: m.url, label: m.name || `map ${mi + 1}` });
+                    (m.alternates || []).forEach((alt, ai) => {
+                        if (alt.url) images.push({ url: alt.url, label: alt.name || `alt ${ai + 1}` });
+                    });
+                });
+            }
+
+            if (images.length === 0) {
+                grid.innerHTML = '<em style="font-size:0.82em; color:#888;">No stored images found — use upload below.</em>';
+            } else {
+                grid.innerHTML = images.map((img, i) => `
+                    <img class="cm-thumb" src="${img.url}" alt="${img.label}"
+                         title="${img.label}" data-url="${img.url}" data-idx="${i}">
+                `).join('');
+
+                grid.querySelectorAll('.cm-thumb').forEach(thumb => {
+                    thumb.onclick = () => {
+                        grid.querySelectorAll('.cm-thumb').forEach(t => t.classList.remove('selected'));
+                        thumb.classList.add('selected');
+                        selectedUrl = thumb.dataset.url;
+                        uploadFile  = null;
+                        document.getElementById('cm-upload-name').textContent = 'No file chosen';
+                        document.getElementById('cm-save-btn').disabled = false;
+                        document.getElementById('cm-status').textContent = '';
+                    };
+                });
+            }
+
+            document.getElementById('cover-modal-overlay').classList.add('open');
+        }
+
+        function closeCoverModal() {
+            document.getElementById('cover-modal-overlay').classList.remove('open');
+        }
+
+        // File upload wiring
+        document.getElementById('cm-choose-btn').onclick = () => {
+            document.getElementById('cm-file-input').click();
+        };
+
+        document.getElementById('cm-file-input').onchange = function() {
+            const file = this.files[0];
+            if (!file) return;
+            uploadFile  = file;
+            selectedUrl = null;
+            document.getElementById('cm-thumb-grid').querySelectorAll('.cm-thumb')
+                .forEach(t => t.classList.remove('selected'));
+            document.getElementById('cm-upload-name').textContent = file.name;
+            document.getElementById('cm-save-btn').disabled = false;
+            document.getElementById('cm-status').textContent = '';
+        };
+
+        document.getElementById('cm-cancel-btn').onclick = closeCoverModal;
+
+        // Save cover
+        document.getElementById('cm-save-btn').onclick = async () => {
+            const statusEl  = document.getElementById('cm-status');
+            const saveBtn   = document.getElementById('cm-save-btn');
+            saveBtn.disabled = true;
+
+            try {
+                let newCoverUrl = selectedUrl;
+
+                if (uploadFile) {
+                    statusEl.textContent = 'Uploading image…';
+                    const storagePath = `users/${userid}/${author}/${series}/${bookid}/cover.jpg`;
+                    newCoverUrl = await uploadartifact(storagePath, uploadFile);
+                    if (!newCoverUrl) throw new Error('Upload returned no URL.');
+                }
+
+                if (!newCoverUrl) throw new Error('No image selected.');
+
+                statusEl.textContent = 'Saving to vault…';
+                const bookRef = doc(db, 'users', userid, 'authors', author, 'series', series, 'books', bookid);
+                await updateDoc(bookRef, { cover: newCoverUrl });
+
+                // Update local cache and refresh the cover display
+                bookData.cover = newCoverUrl;
+                const coverFrame = document.getElementById('cover-frame');
+                coverFrame.innerHTML = `<img id="cover-img" src="${newCoverUrl}" alt="cover">`;
+
+                statusEl.textContent = 'Cover updated ✓';
+                setTimeout(closeCoverModal, 900);
+
             } catch (err) {
                 console.error(err);
-                titleEl.textContent = "error loading tome";
-                contentEl.innerHTML = `<p style="text-align:center;">${err.message}</p>`;
+                statusEl.textContent = 'Error: ' + err.message;
+                saveBtn.disabled = false;
             }
-        }
+        };
 
         window.onload = loadBook;
     </script>

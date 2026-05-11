@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.8 | postest — character position</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+        /* ── Top bar ────────────────────────────────────────────────────── */
+        .top-bar {
+            position: fixed; top: 0; left: 0; right: 300px; z-index: 200;
+            background: var(--aged-parchment);
+            border-bottom: 2px solid var(--earth-brown);
+            padding: 7px 10px;
+            display: flex; gap: 8px; flex-wrap: wrap;
+            align-items: center;
+        }
+        .tool-group {
+            display: flex; align-items: center; gap: 5px;
+            border-right: 1px solid var(--earth-brown); padding-right: 8px;
+        }
+        .tool-group:last-child { border-right: none; }
+        .tool-group label { font-size: 0.78em; white-space: nowrap; }
+        .btn { padding: 4px 9px; font-size: 0.82em; }
+        .btn.active { background-color: var(--moss-green); outline: 2px solid var(--iron-ink); }
+        select.btn { font-family: inherit; cursor: pointer; }
+
+        /* ── Status bar ─────────────────────────────────────────────────── */
+        .status-bar {
+            position: fixed; left: 0; right: 300px; z-index: 199;
+            text-align: center; font-style: italic; font-size: 0.78em;
+            color: var(--iron-ink);
+            background: var(--aged-parchment);
+            border-bottom: 1px solid rgba(106,79,75,0.3);
+            padding: 4px 10px; min-height: 1.4em;
+        }
+
+        /* ── Map viewport ───────────────────────────────────────────────── */
+        #map-viewport {
+            position: fixed; left: 180px; right: 300px; bottom: 48px;
+            overflow: hidden; user-select: none;
+            background: #1e1e2e;
+            cursor: grab;
+        }
+        #map-wrapper   { position: absolute; transform-origin: 0 0; }
+        #map-content   {
+            position: relative; display: inline-block;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+            border: 3px solid var(--earth-brown);
+            line-height: 0;
+        }
+        #map-image     { display: block; -webkit-user-drag: none; }
+        .map-svg       { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+        /* ── Cartographer overlay styles ────────────────────────────────── */
+        .poly-land      { fill: rgba(210,185,110,0.35); stroke: rgba(160,120,40,0.85);  stroke-width: 0.8; }
+        .poly-forest    { fill: rgba(50,120,50,0.35);   stroke: rgba(20,80,20,0.85);    stroke-width: 0.8; }
+        .poly-water     { fill: rgba(60,130,220,0.35);  stroke: rgba(20,70,180,0.85);   stroke-width: 0.8; }
+        .poly-mountains { fill: rgba(155,135,105,0.35); stroke: rgba(100,80,50,0.90);   stroke-width: 0.9; }
+        .path-road      { fill: none; stroke: rgba(180,110,30,0.95); stroke-width: 1.8;
+                          stroke-linejoin: round; stroke-linecap: round; }
+        .path-river     { fill: none; stroke: rgba(40,110,220,0.90); stroke-width: 1.8;
+                          stroke-linejoin: round; stroke-linecap: round; }
+        .pt-circle      { stroke: white; stroke-width: 0.6; fill: rgba(210,40,40,0.90); }
+        .pt-settlement  { fill: rgba(210,40,40,0.90); }
+        .pt-castle      { fill: rgba(60,80,160,0.90); }
+        .pt-ruin        { fill: rgba(110,85,60,0.90); }
+        .pt-landmark    { fill: rgba(130,50,170,0.90); }
+        .pt-mine        { fill: rgba(60,55,50,0.90); }
+        .pt-label       { font-size: 2.2px; fill: rgba(180,20,20,0.95);
+                          stroke: white; stroke-width: 0.4; paint-order: stroke; }
+
+        /* ── Sidebar ────────────────────────────────────────────────────── */
+        #sidebar {
+            position: fixed; top: 0; right: 0;
+            width: 300px; height: 100vh;
+            background: var(--aged-parchment);
+            border-left: 2px solid var(--earth-brown);
+            overflow-y: auto;
+            display: flex; flex-direction: column;
+            z-index: 300;
+        }
+        .sidebar-section {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(106,79,75,0.25);
+        }
+        .sidebar-title {
+            font-family: 'Cinzel', serif;
+            font-size: 0.72em; font-weight: 700;
+            color: var(--earth-brown);
+            text-transform: uppercase; letter-spacing: 0.08em;
+            margin: 0 0 8px 0;
+        }
+        .ai-toggle { display: flex; gap: 16px; }
+        .ai-toggle label {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 0.88em; cursor: pointer;
+        }
+
+        /* ── Collapsible section header ─────────────────────────────────── */
+        details.collapsible > summary {
+            font-family: 'Cinzel', serif;
+            font-size: 0.72em; font-weight: 700;
+            color: var(--earth-brown);
+            text-transform: uppercase; letter-spacing: 0.08em;
+            cursor: pointer; list-style: none;
+            margin-bottom: 8px; padding: 0;
+        }
+        details.collapsible > summary::-webkit-details-marker { display: none; }
+        details.collapsible > summary::before { content: '▶ '; font-size: 0.7em; }
+        details.collapsible[open] > summary::before { content: '▼ '; }
+
+        /* ── Character register ─────────────────────────────────────────── */
+        .register-row {
+            display: flex; align-items: center; gap: 5px;
+            margin-bottom: 4px;
+        }
+        .char-swatch {
+            width: 12px; height: 12px; border-radius: 50%;
+            flex-shrink: 0; border: 1px solid rgba(0,0,0,0.25);
+        }
+        .register-name {
+            font-size: 0.82em; font-weight: bold;
+            min-width: 60px; flex-shrink: 0;
+        }
+        .register-aliases {
+            font-size: 0.75em; color: #666; font-style: italic;
+            flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .register-del {
+            font-size: 0.75em; cursor: pointer; color: #a02020;
+            padding: 1px 4px; border: none; background: none; flex-shrink: 0;
+        }
+        .register-add-row {
+            display: flex; gap: 4px; margin-top: 6px;
+        }
+        .register-add-row input {
+            flex: 1; font-size: 0.78em; padding: 3px 5px;
+            border: 1px solid var(--earth-brown);
+            background: rgba(255,255,255,0.6);
+            border-radius: 2px; font-family: inherit;
+        }
+
+        /* ── Chapter input ──────────────────────────────────────────────── */
+        #chapter-input {
+            width: 100%; box-sizing: border-box;
+            min-height: 110px; resize: vertical;
+            font-family: 'Spectral', serif; font-size: 0.82em;
+            border: 1px solid var(--earth-brown);
+            background: rgba(255,255,255,0.55);
+            padding: 7px; border-radius: 3px;
+            margin-bottom: 8px;
+            color: var(--iron-ink);
+        }
+        #chapter-input::placeholder { color: rgba(106,79,75,0.5); }
+
+        .cache-row {
+            display: flex; gap: 5px; align-items: center; margin-bottom: 5px;
+        }
+        .cache-row select, .cache-row input[type="text"] {
+            flex: 1; font-size: 0.78em; padding: 3px 5px;
+            border: 1px solid var(--earth-brown);
+            background: rgba(255,255,255,0.6);
+            border-radius: 2px; font-family: inherit;
+        }
+        .cache-row .btn { flex-shrink: 0; font-size: 0.75em; padding: 3px 7px; }
+
+        #extract-btn {
+            width: 100%; padding: 8px; font-size: 0.88em; margin-top: 2px;
+        }
+        #extract-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* ── Review panel ───────────────────────────────────────────────── */
+        #review-area { display: none; }
+
+        .review-row {
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(106,79,75,0.12);
+        }
+        .review-row:last-child { border-bottom: none; }
+
+        .review-header {
+            display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
+        }
+        .review-header input[type="checkbox"] { cursor: pointer; flex-shrink: 0; }
+        .review-char-name { font-weight: bold; font-size: 0.85em; flex: 1; }
+
+        .status-badge {
+            font-size: 0.65em; padding: 1px 5px; border-radius: 3px;
+            font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em;
+            flex-shrink: 0;
+        }
+        .s-placed          { background: #d4edda; color: #155724; }
+        .s-vague           { background: #fff3cd; color: #856404; }
+        .s-group_implied   { background: #cce5ff; color: #004085; }
+        .s-no_location     { background: #e2e3e5; color: #383d41; }
+        .s-off_map         { background: #f8d7da; color: #721c24; }
+        .s-wrong_map       { background: #fde8d8; color: #7a3a00; }
+        .s-referenced_only { background: #e2e3e5; color: #383d41; }
+        .s-new_character   { background: #e8d5f5; color: #4a1270; }
+        .s-ambiguous       { background: #fff3cd; color: #856404; }
+
+        .conf-dot { font-size: 0.9em; flex-shrink: 0; }
+        .conf-high   { color: #2a7a2a; }
+        .conf-medium { color: #a07020; }
+        .conf-low    { color: #a02020; }
+
+        .review-loc {
+            width: 100%; box-sizing: border-box;
+            font-size: 0.78em; padding: 3px 5px;
+            border: 1px solid rgba(106,79,75,0.3);
+            background: rgba(255,255,255,0.6);
+            border-radius: 2px;
+            font-family: 'Spectral', serif; font-style: italic;
+            color: var(--iron-ink); margin-bottom: 2px;
+        }
+        .review-loc:disabled { opacity: 0.5; }
+        .review-meta {
+            font-size: 0.72em; color: #666; font-style: italic; line-height: 1.35;
+        }
+
+        #place-all-btn {
+            width: 100%; padding: 9px; font-size: 0.9em; margin-top: 8px;
+        }
+        #place-all-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* ── Debug box ──────────────────────────────────────────────────── */
+        pre.debug-box {
+            font-size: 0.68em; white-space: pre-wrap; word-break: break-word;
+            background: rgba(0,0,0,0.06); padding: 7px; border-radius: 3px;
+            max-height: 180px; overflow-y: auto;
+            color: #444; margin: 6px 0 0 0;
+            border: 1px solid rgba(106,79,75,0.15);
+        }
+        details.debug-details > summary {
+            font-size: 0.75em; cursor: pointer;
+            color: var(--earth-brown); font-style: italic;
+            list-style: none; padding: 4px 0;
+        }
+        details.debug-details > summary::-webkit-details-marker { display: none; }
+        details.debug-details > summary::before { content: '▶ '; font-size: 0.7em; }
+        details.debug-details[open] > summary::before { content: '▼ '; }
+
+        /* ── Coord display ──────────────────────────────────────────────── */
+        .coord-display {
+            position: fixed; bottom: 58px; left: 190px; z-index: 300;
+            background: rgba(0,0,0,0.65); color: #eee;
+            padding: 5px 10px; border-radius: 4px;
+            font-family: monospace; font-size: 0.78em;
+            pointer-events: none;
+        }
+
+        /* ── Layer visibility toggle ────────────────────────────────────── */
+        .layer-hidden { visibility: hidden; }
+
+        /* ── Chapter strip (bottom bar) ─────────────────────────────────── */
+        #chapter-strip {
+            position: fixed; left: 0; right: 300px; bottom: 0; z-index: 200;
+            height: 48px;
+            background: var(--aged-parchment);
+            border-top: 2px solid var(--earth-brown);
+            display: flex; align-items: center;
+            padding: 0 10px; gap: 5px;
+            overflow-x: auto;
+        }
+        #chapter-strip::-webkit-scrollbar { height: 4px; }
+        #chapter-strip::-webkit-scrollbar-thumb { background: rgba(106,79,75,0.35); border-radius: 2px; }
+        #chapter-strip-label {
+            font-family: 'Cinzel', serif; font-size: 0.68em; font-weight: 700;
+            color: var(--earth-brown); text-transform: uppercase; letter-spacing: 0.07em;
+            flex-shrink: 0; padding-right: 10px;
+            border-right: 1px solid rgba(106,79,75,0.3); margin-right: 4px;
+        }
+        .ch-btn {
+            padding: 4px 10px; font-size: 0.76em; white-space: nowrap;
+            flex-shrink: 0; cursor: pointer; font-family: 'Cinzel', serif;
+        }
+        .ch-btn.active {
+            background-color: var(--moss-green);
+            outline: 2px solid var(--iron-ink);
+        }
+
+        /* ── Left sidebar — chapter character list ───────────────────────── */
+        #chapter-sidebar {
+            position: fixed; left: 0; z-index: 150;
+            width: 180px;
+            background: var(--aged-parchment);
+            border-right: 2px solid var(--earth-brown);
+            overflow-y: auto;
+            display: flex; flex-direction: column;
+        }
+        #chapter-sidebar-title {
+            font-family: 'Cinzel', serif; font-size: 0.68em; font-weight: 700;
+            color: var(--earth-brown); text-transform: uppercase; letter-spacing: 0.07em;
+            padding: 9px 10px 6px;
+            border-bottom: 1px solid rgba(106,79,75,0.3);
+            background: rgba(0,0,0,0.03);
+            line-height: 1.35;
+        }
+        #chapter-sidebar-sub {
+            font-size: 0.72em; font-style: italic; color: var(--earth-brown);
+            opacity: 0.75; padding: 4px 10px 6px;
+            border-bottom: 1px solid rgba(106,79,75,0.15);
+        }
+        .ch-char-row {
+            display: flex; align-items: flex-start; gap: 6px;
+            padding: 5px 10px;
+            border-bottom: 1px solid rgba(106,79,75,0.1);
+        }
+        .ch-char-name {
+            font-weight: bold; font-size: 0.82em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ch-char-loc {
+            font-size: 0.72em; font-style: italic; color: #666; margin-top: 1px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* ── Glow layer ──────────────────────────────────────────────────── */
+        @keyframes chapter-glow {
+            0%, 100% { fill-opacity: 0.10; stroke-opacity: 0.50; }
+            50%       { fill-opacity: 0.38; stroke-opacity: 1.00; }
+        }
+        .glow-polygon {
+            fill: rgba(255,220,50,0.18); stroke: rgba(255,175,0,0.8); stroke-width: 1.5;
+            animation: chapter-glow 2.2s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .glow-circle {
+            fill: rgba(255,220,50,0.15); stroke: rgba(255,175,0,0.75); stroke-width: 1.2;
+            animation: chapter-glow 2.2s ease-in-out infinite;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Top bar ──────────────────────────────────────────────────────── -->
+    <div class="top-bar" id="top-bar">
+        <div class="tool-group">
+            <a href="settings.html" class="btn secondary">← settings</a>
+        </div>
+        <div class="tool-group">
+            <label>Book:</label>
+            <select id="book-select" class="btn secondary">
+                <option value="">loading…</option>
+            </select>
+        </div>
+        <div class="tool-group">
+            <label>Map:</label>
+            <select id="map-select" class="btn secondary">
+                <option value="">—</option>
+            </select>
+        </div>
+        <div class="tool-group">
+            <button id="toggle-overlay-btn" class="btn active" title="show / hide cartographer overlay">overlay</button>
+            <button id="toggle-chars-btn"   class="btn active" title="show / hide character layer">characters</button>
+        </div>
+        <div class="tool-group">
+            <button id="fit-btn" class="btn secondary" title="fit map to screen">⊡</button>
+        </div>
+    </div>
+
+    <!-- ── Status bar ───────────────────────────────────────────────────── -->
+    <div class="status-bar" id="status-bar">Select a book to begin.</div>
+
+    <!-- ── Map viewport ─────────────────────────────────────────────────── -->
+    <div id="map-viewport">
+        <div id="map-wrapper">
+            <div id="map-content">
+                <img id="map-image" src="" alt="" draggable="false">
+
+                <svg id="glow-svg" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <g id="glow-layer"></g>
+                </svg>
+
+                <svg id="overlay-svg" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <g id="polygon-layer"></g>
+                    <g id="path-layer"></g>
+                    <g id="point-layer"></g>
+                </svg>
+
+                <svg id="character-svg" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <g id="character-layer"></g>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Coordinate display ───────────────────────────────────────────── -->
+    <div class="coord-display">
+        X:<span id="coord-x">0</span> &nbsp; Y:<span id="coord-y">0</span>
+    </div>
+
+    <!-- ── Left sidebar — chapter character list ──────────────────────── -->
+    <div id="chapter-sidebar">
+        <div id="chapter-sidebar-title">Select a chapter</div>
+        <div id="chapter-sidebar-sub">Use the strip below</div>
+        <div id="chapter-char-list">
+            <div style="padding:10px; font-size:0.8em; font-style:italic; color:#888;">
+                Click a chapter button to see who appears in it.
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Chapter strip (bottom) ──────────────────────────────────────── -->
+    <div id="chapter-strip">
+        <span id="chapter-strip-label">Chapters</span>
+        <div id="chapter-btns" style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
+            <span style="font-size:0.8em; font-style:italic; opacity:0.6;">Load a book to see chapters</span>
+        </div>
+    </div>
+
+    <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+    <div id="sidebar">
+
+        <!-- Overlay status -->
+        <div class="sidebar-section">
+            <p class="sidebar-title">Overlay Status</p>
+            <div id="overlay-status-text" style="font-size:0.8em; color:var(--earth-brown); font-style:italic;">
+                No map loaded yet.
+            </div>
+        </div>
+
+        <!-- AI model -->
+        <div class="sidebar-section">
+            <p class="sidebar-title">AI Model</p>
+            <div class="ai-toggle">
+                <label><input type="radio" name="ai-model" value="openai" checked> OpenAI</label>
+                <label><input type="radio" name="ai-model" value="gemini"> Gemini</label>
+            </div>
+        </div>
+
+        <!-- Character register -->
+        <div class="sidebar-section">
+            <details class="collapsible" open>
+                <summary>Character Register</summary>
+                <div id="register-list"></div>
+                <div class="register-add-row">
+                    <input type="text" id="reg-name"    placeholder="Name">
+                    <input type="text" id="reg-aliases" placeholder="aliases (comma sep.)">
+                    <button class="btn secondary" id="reg-add-btn">+</button>
+                </div>
+                <button class="btn secondary" id="reg-save-btn"
+                        style="width:100%; margin-top:6px; font-size:0.75em;">
+                    Save Register
+                </button>
+            </details>
+        </div>
+
+        <!-- Chapter input -->
+        <div class="sidebar-section">
+            <p class="sidebar-title">Chapter Text</p>
+
+            <div class="cache-row">
+                <select id="cache-select">
+                    <option value="">— load saved extraction —</option>
+                </select>
+                <button class="btn secondary" id="cache-load-btn">Load</button>
+            </div>
+            <div class="cache-row">
+                <input type="text" id="cache-name" placeholder="name this extraction…">
+                <button class="btn secondary" id="cache-save-btn">Save</button>
+            </div>
+
+            <textarea id="chapter-input"
+                placeholder="Paste a chapter or passage here…"></textarea>
+
+            <button id="extract-btn" class="btn" disabled>
+                Extract Characters (Pass 1)
+            </button>
+        </div>
+
+        <!-- Review panel -->
+        <div class="sidebar-section" id="review-area">
+            <p class="sidebar-title">Review &amp; Place</p>
+            <div id="review-list"></div>
+            <button id="place-all-btn" class="btn">Place Characters (Pass 2)</button>
+            <details class="debug-details" style="margin-top:10px;">
+                <summary>raw Pass 1 response</summary>
+                <pre class="debug-box" id="raw-pass1"></pre>
+            </details>
+        </div>
+
+    </div><!-- /sidebar -->
+
+    <script type="module">
+        import { db } from './firebase.js';
+        import {
+            doc, getDoc, collection, getDocs
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // ── Constants ──────────────────────────────────────────────────────
+        const USERID = 'default-user';
+        const CHAR_COLOURS = [
+            '#ff7800', '#2266cc', '#22aa44', '#cc2222',
+            '#aa44cc', '#cc8800', '#006688', '#884400'
+        ];
+
+        // Statuses that are eligible for Pass 2 placement
+        const PLACEABLE = ['placed', 'vague', 'group_implied'];
+
+        // ── State ──────────────────────────────────────────────────────────
+        let allBooks          = [];
+        let currentBook       = null;
+        let currentMapIdx     = 0;
+        let currentVersionKey = 'original';   // 'original' | 'alt_0' | 'alt_1' …
+        let mapLedger         = { polygons: [], paths: [], points: [] };
+        let overlayVisible    = true;
+        let charsVisible      = true;
+        let scale = 1, panX = 0, panY = 0;
+        let isPanning = false, startMouseX = 0, startMouseY = 0;
+        let characterRegister = [];   // [{name, aliases:[], colour}]
+        let pass1Result       = [];   // last Pass 1 character array
+
+        // ── Chapter mode state ─────────────────────────────────────────────
+        let allChapters      = [];   // [{num, title, characters}] from Firestore
+        let activeChapterNum = null;
+        let pass2Cache       = {};   // {chapterNum: [{name,x,y,colour}]} — avoids repeat AI calls
+
+        // ── DOM refs ───────────────────────────────────────────────────────
+        const topBar        = document.getElementById('top-bar');
+        const statusEl      = document.getElementById('status-bar');
+        const bookSelect    = document.getElementById('book-select');
+        const mapSelect     = document.getElementById('map-select');
+        const mapViewport   = document.getElementById('map-viewport');
+        const mapWrapper    = document.getElementById('map-wrapper');
+        const mapContent    = document.getElementById('map-content');
+        const mapImage      = document.getElementById('map-image');
+        const overlaySvg    = document.getElementById('overlay-svg');
+        const characterSvg  = document.getElementById('character-svg');
+        const glowSvg       = document.getElementById('glow-svg');
+        const toggleOverlay = document.getElementById('toggle-overlay-btn');
+        const toggleChars   = document.getElementById('toggle-chars-btn');
+        const fitBtn        = document.getElementById('fit-btn');
+        const coordX        = document.getElementById('coord-x');
+        const coordY        = document.getElementById('coord-y');
+        const chapterInput  = document.getElementById('chapter-input');
+        const extractBtn    = document.getElementById('extract-btn');
+        const reviewArea    = document.getElementById('review-area');
+        const reviewList    = document.getElementById('review-list');
+        const placeAllBtn   = document.getElementById('place-all-btn');
+        const cacheSelect   = document.getElementById('cache-select');
+        const cacheNameEl   = document.getElementById('cache-name');
+
+        // ── Status helper ──────────────────────────────────────────────────
+        let statusTimer;
+        function setStatus(msg = '', duration = 0) {
+            statusEl.textContent = msg;
+            if (duration) {
+                clearTimeout(statusTimer);
+                statusTimer = setTimeout(() => { statusEl.textContent = ''; }, duration);
+            }
+        }
+
+        // ── Viewport layout ────────────────────────────────────────────────
+        function layoutViewport() {
+            const barH    = topBar.offsetHeight;
+            const statusH = statusEl.offsetHeight;
+            statusEl.style.top    = barH + 'px';
+            mapViewport.style.top = (barH + statusH) + 'px';
+            const chSidebar = document.getElementById('chapter-sidebar');
+            if (chSidebar) {
+                chSidebar.style.top    = (barH + statusH) + 'px';
+                chSidebar.style.bottom = '48px';
+            }
+        }
+
+        // ── Pan & Zoom ─────────────────────────────────────────────────────
+        function applyTransform() {
+            mapWrapper.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+        }
+
+        function fitMap() {
+            if (!mapImage.naturalWidth) return;
+            const vw = mapViewport.offsetWidth;
+            const vh = mapViewport.offsetHeight;
+            scale = Math.min(vw / mapImage.naturalWidth, vh / mapImage.naturalHeight) * 0.92;
+            panX  = (vw - mapImage.naturalWidth  * scale) / 2;
+            panY  = (vh - mapImage.naturalHeight * scale) / 2;
+            applyTransform();
+        }
+
+        mapViewport.addEventListener('wheel', e => {
+            e.preventDefault();
+            const rect  = mapViewport.getBoundingClientRect();
+            const mx    = e.clientX - rect.left;
+            const my    = e.clientY - rect.top;
+            const delta = e.deltaY < 0 ? 1.12 : 0.89;
+            panX  = mx - (mx - panX) * delta;
+            panY  = my - (my - panY) * delta;
+            scale *= delta;
+            applyTransform();
+        }, { passive: false });
+
+        mapViewport.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            isPanning   = true;
+            startMouseX = e.clientX - panX;
+            startMouseY = e.clientY - panY;
+            mapViewport.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', e => {
+            const rect = mapContent.getBoundingClientRect();
+            if (rect.width > 0) {
+                coordX.textContent = ((e.clientX - rect.left) / rect.width  * 100).toFixed(1);
+                coordY.textContent = ((e.clientY - rect.top)  / rect.height * 100).toFixed(1);
+            }
+            if (!isPanning) return;
+            panX = e.clientX - startMouseX;
+            panY = e.clientY - startMouseY;
+            applyTransform();
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPanning = false;
+            mapViewport.style.cursor = 'grab';
+        });
+
+        // ── SVG sizing ─────────────────────────────────────────────────────
+        function pinSvgsToImage() {
+            const w = mapImage.naturalWidth  + 'px';
+            const h = mapImage.naturalHeight + 'px';
+            glowSvg.style.width       = w;  glowSvg.style.height       = h;
+            overlaySvg.style.width    = w;  overlaySvg.style.height    = h;
+            characterSvg.style.width  = w;  characterSvg.style.height  = h;
+        }
+
+        // ── Layer toggles ──────────────────────────────────────────────────
+        toggleOverlay.onclick = () => {
+            overlayVisible = !overlayVisible;
+            overlaySvg.classList.toggle('layer-hidden', !overlayVisible);
+            toggleOverlay.classList.toggle('active', overlayVisible);
+        };
+
+        toggleChars.onclick = () => {
+            charsVisible = !charsVisible;
+            characterSvg.classList.toggle('layer-hidden', !charsVisible);
+            toggleChars.classList.toggle('active', charsVisible);
+        };
+
+        fitBtn.onclick = fitMap;
+        window.addEventListener('resize', layoutViewport);
+
+        // ── Render cartographer overlay ────────────────────────────────────
+        function renderOverlay() {
+            document.getElementById('polygon-layer').innerHTML = '';
+            document.getElementById('path-layer').innerHTML    = '';
+            document.getElementById('point-layer').innerHTML   = '';
+
+            mapLedger.polygons.forEach(p => {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                el.setAttribute('points', p.coords.map(c => `${c.x},${c.y}`).join(' '));
+                el.classList.add(`poly-${p.type}`);
+                document.getElementById('polygon-layer').appendChild(el);
+            });
+
+            mapLedger.paths.forEach(p => {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+                el.setAttribute('points', p.coords.map(c => `${c.x},${c.y}`).join(' '));
+                el.classList.add(`path-${p.type}`);
+                document.getElementById('path-layer').appendChild(el);
+            });
+
+            mapLedger.points.forEach(p => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 1.4);
+                c.classList.add('pt-circle', `pt-${p.type}`);
+                const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                t.setAttribute('x', p.x); t.setAttribute('y', p.y + 3.2);
+                t.setAttribute('text-anchor', 'middle');
+                t.classList.add('pt-label');
+                t.textContent = p.name;
+                g.appendChild(c); g.appendChild(t);
+                document.getElementById('point-layer').appendChild(g);
+            });
+        }
+
+        // ── Character colour lookup ────────────────────────────────────────
+        function colourForCharacter(name) {
+            const reg = characterRegister.find(
+                r => r.name.toLowerCase() === name.toLowerCase()
+            );
+            if (reg) return reg.colour;
+            // Deterministic colour by name hash
+            let h = 0;
+            for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+            return CHAR_COLOURS[h % CHAR_COLOURS.length];
+        }
+
+        // ── Render multiple characters on SVG ──────────────────────────────
+        function renderCharacters(placements) {
+            // placements: [{name, x, y, colour}]
+            const layer = document.getElementById('character-layer');
+            layer.innerHTML = '';
+
+            placements.forEach(({ name, x, y, colour }) => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', x);
+                circle.setAttribute('cy', y);
+                circle.setAttribute('r', 2);
+                circle.setAttribute('fill', colour);
+                circle.setAttribute('stroke', 'white');
+                circle.setAttribute('stroke-width', '0.5');
+
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', x);
+                label.setAttribute('y', parseFloat(y) + 4.8);
+                label.setAttribute('text-anchor', 'middle');
+                label.setAttribute('font-size', '3');
+                label.setAttribute('font-weight', 'bold');
+                label.setAttribute('fill', colour);
+                label.setAttribute('stroke', 'white');
+                label.setAttribute('stroke-width', '0.4');
+                label.setAttribute('paint-order', 'stroke');
+                label.textContent = name;
+
+                g.appendChild(circle);
+                g.appendChild(label);
+                layer.appendChild(g);
+            });
+
+            // Ensure character layer is visible
+            if (!charsVisible) {
+                charsVisible = true;
+                characterSvg.classList.remove('layer-hidden');
+                toggleChars.classList.add('active');
+            }
+        }
+
+        // ── Build overlay description string for AI ────────────────────────
+        function buildOverlayDescription() {
+            const lines = [];
+
+            if (mapLedger.points.length > 0) {
+                lines.push('SETTLEMENTS & LANDMARKS:');
+                mapLedger.points.forEach(p => {
+                    lines.push(`  - "${p.name}" (${p.type}) at (${p.x.toFixed(1)}, ${p.y.toFixed(1)})`);
+                });
+            } else {
+                lines.push('SETTLEMENTS & LANDMARKS: none recorded on this map.');
+            }
+
+            if (mapLedger.paths.length > 0) {
+                lines.push('\nROADS & RIVERS:');
+                mapLedger.paths.forEach(p => {
+                    const s = p.coords[0];
+                    const e = p.coords[p.coords.length - 1];
+                    lines.push(
+                        `  - "${p.name}" (${p.type}) — from (${s.x.toFixed(1)}, ${s.y.toFixed(1)}) to (${e.x.toFixed(1)}, ${e.y.toFixed(1)})`
+                    );
+                });
+            }
+
+            if (mapLedger.polygons.length > 0) {
+                lines.push('\nREGIONS:');
+                mapLedger.polygons.forEach(p => {
+                    const cx = (p.coords.reduce((s, c) => s + c.x, 0) / p.coords.length).toFixed(1);
+                    const cy = (p.coords.reduce((s, c) => s + c.y, 0) / p.coords.length).toFixed(1);
+                    lines.push(`  - "${p.name}" (${p.type} region) — centred around (${cx}, ${cy})`);
+                });
+            }
+
+            return lines.join('\n');
+        }
+
+        // ── Build Pass 1 system prompt ─────────────────────────────────────
+        function buildPass1Prompt() {
+            const mapNames = currentBook
+                ? currentBook.maps.map((m, i) => m.name || `map ${i + 1}`).join(', ')
+                : 'unknown';
+
+            const registerText = characterRegister.length > 0
+                ? characterRegister.map(r =>
+                    `  - ${r.name}` +
+                    (r.aliases.length > 0 ? ` (also known as: ${r.aliases.join(', ')})` : '')
+                  ).join('\n')
+                : '  (none provided — identify all characters from the text)';
+
+            return `You are a character extraction assistant for a fantasy novel reader application.
+
+Your task: read a chapter or passage and identify every character who is PHYSICALLY PRESENT in the narrative, reporting their location at the END of the passage.
+
+CHARACTER REGISTER (canonical names and known aliases):
+${registerText}
+
+MAPS AVAILABLE IN THIS BOOK:
+${mapNames}
+
+INSTRUCTIONS:
+1. Only include characters who are physically present in the scene. Do NOT include characters mentioned in dialogue, memory, or flashback.
+2. For group travel ("they rode north"), give each named group member their own entry with status "group_implied" and the same location.
+3. Always report the character's location at the END of the passage. If they move during it, report their final position.
+4. Resolve aliases ("the boy", "the ranger", "she", etc.) to canonical names from the register where possible.
+5. Assign one of these statuses:
+   - "placed"           — a specific named location can be identified
+   - "vague"            — only a directional or general geographic clue exists (e.g. "somewhere to the east")
+   - "no_location"      — character is present but no location can be determined
+   - "off_map"          — character is at a location not on any available map
+   - "wrong_map"        — character is on a different map from the one currently active
+   - "referenced_only"  — mentioned in speech/memory but not physically present
+   - "group_implied"    — location inferred from a group
+   - "new_character"    — not in the register; flag for review
+   - "ambiguous"        — location genuinely cannot be reliably determined
+6. Assign confidence: "high", "medium", or "low".
+7. CRITICAL — location_description must name the SETTLEMENT, FORTRESS, REGION, or NAMED GEOGRAPHIC FEATURE where the character is located. Do NOT describe their position within a building (e.g. "a chamber", "the doorway", "the top of a tower"). The map cannot show room-level detail. If a character is inside a building, name the settlement or place that building belongs to. Example: write "Murias" not "in a chamber within Murias".
+
+Return ONLY valid JSON — no other text, no markdown fences:
+{
+  "characters": [
+    {
+      "name": "<canonical name, or best name from text>",
+      "aliases_used": ["<alias seen in text>"],
+      "location_description": "<the settlement, fortress, region or named geographic feature — NOT a room or interior detail>",
+      "status": "<see above>",
+      "confidence": "<high|medium|low>",
+      "map_hint": "<name of relevant map if determinable, else null>",
+      "notes": "<any caveats, ambiguities, or movement notes — empty string if none>"
+    }
+  ]
+}`;
+        }
+
+        // ── Build Pass 2 system prompt for one character ───────────────────
+        function buildPass2Prompt(charName, locationDesc) {
+            return `You are a cartographic positioning assistant for a fantasy map reader application.
+
+COORDINATE SYSTEM:
+- (0,0) is TOP-LEFT of the map image; (100,100) is BOTTOM-RIGHT
+- North = towards y=0 | South = towards y=100
+- East  = towards x=100 | West = towards x=0
+
+IMPORTANT — WHAT THE MAP SHOWS:
+The map only shows settlements, fortresses, regions, roads, and rivers. It does NOT show the interiors of buildings. If the location description mentions a room, chamber, doorway, tower, hall, or any other interior detail, IGNORE that detail entirely. Instead, identify the settlement or named geographic feature that the building belongs to, and place the character there.
+
+MAP FEATURES:
+${buildOverlayDescription()}
+
+TASK:
+The character "${charName}" is described as being at: "${locationDesc}"
+
+1. Extract any settlement name, fortress name, region name, or geographic feature from the description. Ignore room-level or interior detail.
+2. Match the settlement or place name to the features listed above using fuzzy matching (e.g. "Murias" matches a settlement named "Murias").
+3. If the character is travelling between two named places, estimate a midpoint along that route.
+4. If no specific named feature matches, use broad geographic clues (e.g. "northern highlands") to estimate a position.
+
+Return ONLY valid JSON — no other text:
+{"x": <number 0-100>, "y": <number 0-100>, "matched": "<feature matched>", "confidence": "<high|medium|low>"}`;
+        }
+
+        // ── AI call helpers ────────────────────────────────────────────────
+        async function callOpenAI(systemPrompt, userContent) {
+            const key = localStorage.getItem('openai_key');
+            if (!key) throw new Error('No OpenAI key found — please set it in API Settings.');
+
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${key}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    response_format: { type: 'json_object' },
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user',   content: userContent }
+                    ]
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `OpenAI error ${res.status}`);
+            }
+            const data = await res.json();
+            return data.choices[0].message.content;
+        }
+
+        async function callGemini(systemPrompt, userContent) {
+            const key = localStorage.getItem('gemini_key');
+            if (!key) throw new Error('No Gemini key found — please set it in API Settings.');
+
+            const fullPrompt = systemPrompt + '\n\n' + userContent;
+
+            const res = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: fullPrompt }] }],
+                        generationConfig: { responseMimeType: 'application/json' }
+                    })
+                }
+            );
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `Gemini error ${res.status}`);
+            }
+            const data = await res.json();
+            return data.candidates[0].content.parts[0].text;
+        }
+
+        async function callAI(systemPrompt, userContent) {
+            const model = document.querySelector('input[name="ai-model"]:checked').value;
+            return model === 'openai'
+                ? callOpenAI(systemPrompt, userContent)
+                : callGemini(systemPrompt, userContent);
+        }
+
+        // ── Character register ─────────────────────────────────────────────
+        function registerKey() {
+            return currentBook
+                ? `postest_register_${currentBook.bookid}`
+                : 'postest_register_default';
+        }
+
+        function loadRegister() {
+            try {
+                const saved = localStorage.getItem(registerKey());
+                characterRegister = saved ? JSON.parse(saved) : [];
+            } catch { characterRegister = []; }
+            characterRegister.forEach((r, i) => {
+                r.colour = CHAR_COLOURS[i % CHAR_COLOURS.length];
+            });
+            renderRegisterUI();
+        }
+
+        function saveRegister() {
+            localStorage.setItem(registerKey(), JSON.stringify(characterRegister));
+            setStatus('Character register saved.', 3000);
+        }
+
+        function renderRegisterUI() {
+            const list = document.getElementById('register-list');
+            if (characterRegister.length === 0) {
+                list.innerHTML =
+                    '<div style="font-size:0.78em;font-style:italic;color:#888;margin-bottom:6px;">No characters yet.</div>';
+                return;
+            }
+            list.innerHTML = characterRegister.map((r, i) => `
+                <div class="register-row">
+                    <span class="char-swatch" style="background:${r.colour}"></span>
+                    <span class="register-name">${r.name}</span>
+                    <span class="register-aliases">${r.aliases.join(', ') || '—'}</span>
+                    <button class="register-del" data-idx="${i}" title="Remove">✕</button>
+                </div>
+            `).join('');
+
+            list.querySelectorAll('.register-del').forEach(btn => {
+                btn.onclick = () => {
+                    characterRegister.splice(parseInt(btn.dataset.idx), 1);
+                    characterRegister.forEach((r, i) => {
+                        r.colour = CHAR_COLOURS[i % CHAR_COLOURS.length];
+                    });
+                    renderRegisterUI();
+                };
+            });
+        }
+
+        document.getElementById('reg-add-btn').onclick = () => {
+            const name = document.getElementById('reg-name').value.trim();
+            if (!name) return;
+            const aliasStr = document.getElementById('reg-aliases').value.trim();
+            const aliases  = aliasStr
+                ? aliasStr.split(',').map(a => a.trim()).filter(Boolean)
+                : [];
+            characterRegister.push({
+                name, aliases,
+                colour: CHAR_COLOURS[characterRegister.length % CHAR_COLOURS.length]
+            });
+            document.getElementById('reg-name').value    = '';
+            document.getElementById('reg-aliases').value = '';
+            renderRegisterUI();
+        };
+
+        document.getElementById('reg-save-btn').onclick = saveRegister;
+
+        // ── Cache management ───────────────────────────────────────────────
+        function cacheKey(name) {
+            const id = currentBook ? currentBook.bookid : 'default';
+            return `postest_cache_${id}_${name}`;
+        }
+
+        function cacheListKey() {
+            const id = currentBook ? currentBook.bookid : 'default';
+            return `postest_cachelist_${id}`;
+        }
+
+        function getCacheList() {
+            try { return JSON.parse(localStorage.getItem(cacheListKey()) || '[]'); }
+            catch { return []; }
+        }
+
+        function refreshCacheSelect() {
+            const list = getCacheList();
+            cacheSelect.innerHTML =
+                '<option value="">— load saved extraction —</option>' +
+                list.map(n => `<option value="${n}">${n}</option>`).join('');
+        }
+
+        document.getElementById('cache-save-btn').onclick = () => {
+            const name = cacheNameEl.value.trim();
+            if (!name)             { setStatus('Enter a name for this extraction.', 3000); return; }
+            if (!pass1Result.length) { setStatus('No extraction to save yet.', 3000); return; }
+
+            localStorage.setItem(cacheKey(name), JSON.stringify(pass1Result));
+            const list = getCacheList();
+            if (!list.includes(name)) {
+                list.push(name);
+                localStorage.setItem(cacheListKey(), JSON.stringify(list));
+            }
+            refreshCacheSelect();
+            setStatus(`Extraction "${name}" saved.`, 3000);
+        };
+
+        document.getElementById('cache-load-btn').onclick = () => {
+            const name = cacheSelect.value;
+            if (!name) return;
+            try {
+                const data = JSON.parse(localStorage.getItem(cacheKey(name)) || 'null');
+                if (!data) { setStatus('Cache entry not found.', 3000); return; }
+                pass1Result = data;
+                cacheNameEl.value = name;
+                renderReviewPanel(pass1Result);
+                setStatus(`Loaded extraction "${name}".`, 3000);
+            } catch (e) {
+                setStatus('Error loading cache: ' + e.message, 4000);
+            }
+        };
+
+        // ── Pass 1: Extract characters from chapter ────────────────────────
+        extractBtn.onclick = async () => {
+            const chapterText = chapterInput.value.trim();
+            if (!chapterText) { setStatus('Paste a chapter or passage first.', 3000); return; }
+
+            const aiLabel = document.querySelector('input[name="ai-model"]:checked').value === 'openai'
+                ? 'OpenAI' : 'Gemini';
+
+            extractBtn.disabled = true;
+            setStatus(`Reading passage with ${aiLabel} (Pass 1)…`);
+
+            try {
+                const sysPrompt   = buildPass1Prompt();
+                const userContent = 'Passage:\n\n' + chapterText;
+                const raw         = await callAI(sysPrompt, userContent);
+
+                document.getElementById('raw-pass1').textContent = raw;
+
+                let parsed;
+                try   { parsed = JSON.parse(raw); }
+                catch { throw new Error('AI response was not valid JSON. See raw response below.'); }
+
+                pass1Result = parsed.characters || [];
+                renderReviewPanel(pass1Result);
+                setStatus(
+                    `Pass 1 complete — ${pass1Result.length} character(s) identified. Review below.`,
+                    0
+                );
+
+            } catch (err) {
+                setStatus('Pass 1 error: ' + err.message);
+                console.error(err);
+            } finally {
+                extractBtn.disabled = false;
+            }
+        };
+
+        // ── Render the review panel ────────────────────────────────────────
+        function renderReviewPanel(characters) {
+            reviewArea.style.display = 'block';
+
+            if (!characters.length) {
+                reviewList.innerHTML =
+                    '<div style="font-size:0.82em;font-style:italic;">No characters found.</div>';
+                return;
+            }
+
+            reviewList.innerHTML = characters.map((c, i) => {
+                const colour    = colourForCharacter(c.name);
+                const placeable = PLACEABLE.includes(c.status);
+                const checked   = placeable ? 'checked' : '';
+                const disabled  = placeable ? '' : 'disabled';
+                const confCls   = `conf-${c.confidence || 'low'}`;
+                const badge     = `<span class="status-badge s-${c.status}">${c.status.replace(/_/g,' ')}</span>`;
+                const locVal    = (c.location_description || '').replace(/"/g, '&quot;');
+
+                const metaParts = [];
+                if (c.aliases_used && c.aliases_used.length)
+                    metaParts.push(`Called: ${c.aliases_used.join(', ')}`);
+                if (c.notes)
+                    metaParts.push(c.notes);
+                const meta = metaParts.length
+                    ? `<div class="review-meta">${metaParts.join(' · ')}</div>`
+                    : '';
+
+                return `
+                <div class="review-row" data-idx="${i}">
+                    <div class="review-header">
+                        <input type="checkbox" class="review-check" data-idx="${i}" ${checked} ${disabled}>
+                        <span class="char-swatch" style="background:${colour}"></span>
+                        <span class="review-char-name">${c.name}</span>
+                        ${badge}
+                        <span class="conf-dot ${confCls}" title="confidence: ${c.confidence}">●</span>
+                    </div>
+                    <input type="text" class="review-loc" data-idx="${i}"
+                           value="${locVal}" ${disabled}
+                           placeholder="location description…">
+                    ${meta}
+                </div>`;
+            }).join('');
+        }
+
+        // ── Pass 2: Place checked characters on map ────────────────────────
+        placeAllBtn.onclick = async () => {
+            if (!pass1Result.length) return;
+
+            const checkedIndices = [...document.querySelectorAll('.review-check:checked')]
+                .map(cb => parseInt(cb.dataset.idx));
+
+            if (!checkedIndices.length) {
+                setStatus('No characters selected for placement.', 3000);
+                return;
+            }
+
+            placeAllBtn.disabled = true;
+            const placements = [];
+
+            for (const idx of checkedIndices) {
+                const char   = pass1Result[idx];
+                const locEl  = document.querySelector(`.review-loc[data-idx="${idx}"]`);
+                const locDesc = locEl ? locEl.value.trim() : char.location_description;
+                if (!locDesc) continue;
+
+                const colour = colourForCharacter(char.name);
+                setStatus(`Placing ${char.name}…`);
+
+                try {
+                    const sysPrompt = buildPass2Prompt(char.name, locDesc);
+                    const raw       = await callAI(sysPrompt, `Place ${char.name}.`);
+                    const result    = JSON.parse(raw);
+                    const x         = parseFloat(result.x);
+                    const y         = parseFloat(result.y);
+                    if (!isNaN(x) && !isNaN(y)) {
+                        placements.push({ name: char.name, x, y, colour });
+                    }
+                } catch (err) {
+                    console.warn(`Could not place ${char.name}:`, err.message);
+                    setStatus(`Warning: could not place ${char.name}.`, 3000);
+                }
+            }
+
+            renderCharacters(placements);
+            placeAllBtn.disabled = false;
+            setStatus(`${placements.length} of ${checkedIndices.length} character(s) placed on the map.`, 6000);
+        };
+
+        // ── Overlay status display ─────────────────────────────────────────
+        function setOverlayStatus(html) {
+            document.getElementById('overlay-status-text').innerHTML = html;
+        }
+
+        // ── Load overlay from Firestore ────────────────────────────────────
+        async function loadOverlay(book, mapIdx, versionKey = 'original') {
+            mapLedger = { polygons: [], paths: [], points: [] };
+            setStatus('Loading overlay from vault…');
+
+            // Overlay key matches what mapgen saved:
+            //   original  → map_0
+            //   alt_0     → map_0_alt_0
+            const overlayKey = versionKey === 'original'
+                ? `map_${mapIdx}`
+                : `map_${mapIdx}_${versionKey}`;
+
+            const firestorePath =
+                `users/${book.userid}/authors/${book.author}` +
+                `/series/${book.series}/books/${book.bookid}` +
+                `/overlays/${overlayKey}`;
+
+            setOverlayStatus(
+                `Querying:<br><code style="font-size:0.85em;">${firestorePath}</code><br>…waiting`
+            );
+
+            try { renderOverlay(); } catch (e) { console.warn('renderOverlay (clear):', e); }
+
+            try {
+                const snap = await getDoc(doc(db,
+                    'users', book.userid,
+                    'authors', book.author,
+                    'series', book.series,
+                    'books', book.bookid,
+                    'overlays', overlayKey
+                ));
+
+                if (snap.exists()) {
+                    mapLedger = snap.data().ledger || { polygons: [], paths: [], points: [] };
+                    try { renderOverlay(); } catch (e) { console.warn('renderOverlay:', e); }
+                    const nPoly  = mapLedger.polygons.length;
+                    const nPath  = mapLedger.paths.length;
+                    const nPoint = mapLedger.points.length;
+                    setStatus(`Overlay loaded — ${nPoly + nPath + nPoint} feature(s) ready.`, 6000);
+                    setOverlayStatus(
+                        `<span style="color:#2a7a2a;font-weight:bold;">✓ Found</span><br>` +
+                        `${nPoly} region(s) &nbsp;·&nbsp; ${nPath} road/river(s) &nbsp;·&nbsp; ${nPoint} settlement(s)<br>` +
+                        `<span style="font-size:0.85em;opacity:0.7;">${firestorePath}</span>`
+                    );
+                } else {
+                    setStatus('Overlay not found — AI will have no location data.', 8000);
+                    setOverlayStatus(
+                        `<span style="color:#a02020;font-weight:bold;">✗ Not found</span><br>` +
+                        `No overlay at:<br><code style="font-size:0.85em;">${firestorePath}</code><br><br>` +
+                        `<em>Did mapgen.html save successfully?</em>`
+                    );
+                }
+            } catch (err) {
+                console.error(err);
+                setStatus('Error loading overlay: ' + err.message);
+                setOverlayStatus(`<span style="color:#a02020;">Error: ${err.message}</span>`);
+            }
+        }
+
+        // ── Load map image then overlay ────────────────────────────────────
+        function loadMap(book, mapIdx, versionKey = 'original') {
+            const mapData = book.maps[mapIdx];
+            if (!mapData) { setStatus('Map not found.'); return; }
+
+            // Resolve the correct image URL for this version
+            let mapUrl = mapData.url;
+            if (versionKey !== 'original') {
+                const altIdx = parseInt(versionKey.replace('alt_', ''));
+                mapUrl = (mapData.alternates || [])[altIdx]?.url || mapData.url;
+            }
+
+            extractBtn.disabled = true;
+            setStatus('Loading map image…');
+
+            let handled = false;
+            const onLoaded = () => {
+                if (handled) return;
+                handled = true;
+                pinSvgsToImage();
+                fitMap();
+                loadOverlay(book, mapIdx, versionKey).then(() => {
+                    extractBtn.disabled = false;
+                    refreshCacheSelect();
+                });
+            };
+
+            mapImage.onload  = onLoaded;
+            mapImage.onerror = () => setStatus('Failed to load map image.');
+            mapImage.src     = mapUrl;
+            if (mapImage.complete && mapImage.naturalWidth > 0) onLoaded();
+        }
+
+        // ── Book dropdown ──────────────────────────────────────────────────
+        bookSelect.onchange = () => {
+            const idx = bookSelect.value;
+            if (idx === '') return;
+            currentBook   = allBooks[parseInt(idx)];
+            currentMapIdx = 0;
+
+            // Build map options including all alternate versions.
+            // Option value is encoded as "mapIdx|versionKey".
+            // The preferred version is marked with ★ and selected by default.
+            const options = [];
+            currentBook.maps.forEach((m, i) => {
+                const preferred = m.preferred || 'original';
+                const baseName  = m.name || `map ${i + 1}`;
+                options.push(
+                    `<option value="${i}|original">${baseName}${preferred === 'original' ? ' ★' : ''}</option>`
+                );
+                (m.alternates || []).forEach((alt, ai) => {
+                    const key = `alt_${ai}`;
+                    options.push(
+                        `<option value="${i}|${key}">${baseName} — ${alt.name || key}${preferred === key ? ' ★' : ''}</option>`
+                    );
+                });
+            });
+            mapSelect.innerHTML = options.join('');
+
+            // Auto-select the preferred version of map 0
+            const preferred0 = currentBook.maps[0].preferred || 'original';
+            currentVersionKey = preferred0;
+            mapSelect.value   = `0|${preferred0}`;
+
+            document.getElementById('character-layer').innerHTML = '';
+            document.getElementById('glow-layer').innerHTML = '';
+            reviewArea.style.display = 'none';
+            pass1Result = [];
+
+            // Reset chapter state
+            allChapters = []; activeChapterNum = null; pass2Cache = {};
+            document.getElementById('chapter-sidebar-title').textContent = 'Select a chapter';
+            document.getElementById('chapter-sidebar-sub').textContent   = 'Use the strip below';
+            document.getElementById('chapter-char-list').innerHTML =
+                '<div style="padding:10px;font-size:0.8em;font-style:italic;color:#888;">Click a chapter button to see who appears in it.</div>';
+            document.getElementById('chapter-btns').innerHTML =
+                '<span style="font-size:0.8em;font-style:italic;opacity:0.6;">Loading chapters…</span>';
+
+            loadRegister();
+            loadMap(currentBook, 0, preferred0);
+            loadChapters(currentBook);
+        };
+
+        // ── Map dropdown ───────────────────────────────────────────────────
+        mapSelect.onchange = () => {
+            const [idxStr, vKey] = mapSelect.value.split('|');
+            currentMapIdx     = parseInt(idxStr);
+            currentVersionKey = vKey || 'original';
+            document.getElementById('character-layer').innerHTML = '';
+            document.getElementById('glow-layer').innerHTML = '';
+            pass2Cache = {};
+            activeChapterNum = null;
+            document.querySelectorAll('.ch-btn').forEach(b => b.classList.remove('active'));
+            loadMap(currentBook, currentMapIdx, currentVersionKey);
+        };
+
+        // ── Load all books with maps from Firestore ────────────────────────
+        async function loadAllBooks() {
+            setStatus('Consulting the vault for mapped books…');
+            bookSelect.innerHTML = '<option value="">loading…</option>';
+
+            try {
+                const authorsSnap = await getDocs(
+                    collection(db, 'users', USERID, 'authors')
+                );
+
+                const booksWithMaps = [];
+
+                for (const authorDoc of authorsSnap.docs) {
+                    const seriesSnap = await getDocs(
+                        collection(db, 'users', USERID, 'authors', authorDoc.id, 'series')
+                    );
+                    for (const seriesDoc of seriesSnap.docs) {
+                        const booksSnap = await getDocs(
+                            collection(db, 'users', USERID,
+                                'authors', authorDoc.id,
+                                'series', seriesDoc.id,
+                                'books')
+                        );
+                        for (const bookDoc of booksSnap.docs) {
+                            const data = bookDoc.data();
+                            if (Array.isArray(data.maps) && data.maps.length > 0) {
+                                booksWithMaps.push({
+                                    userid: USERID,
+                                    author: authorDoc.id,
+                                    series: seriesDoc.id,
+                                    bookid: bookDoc.id,
+                                    title:  data.title || bookDoc.id,
+                                    maps:   data.maps
+                                });
+                            }
+                        }
+                    }
+                }
+
+                allBooks = booksWithMaps;
+
+                if (!allBooks.length) {
+                    bookSelect.innerHTML = '<option value="">no mapped books found</option>';
+                    setStatus('No books with maps found. Upload and map a book first.');
+                    return;
+                }
+
+                bookSelect.innerHTML =
+                    '<option value="">— select a book —</option>' +
+                    allBooks.map((b, i) =>
+                        `<option value="${i}">${b.title} (${b.series})</option>`
+                    ).join('');
+
+                setStatus('Ready. Select a book to load its map.', 3000);
+
+            } catch (err) {
+                console.error(err);
+                setStatus('Error loading library: ' + err.message);
+                bookSelect.innerHTML = '<option value="">error — check console</option>';
+            }
+        }
+
+        // ── Load chapters from Firestore ───────────────────────────────────
+        async function loadChapters(book) {
+            try {
+                const snap = await getDocs(
+                    collection(db,
+                        'users', book.userid, 'authors', book.author,
+                        'series', book.series, 'books', book.bookid, 'chapters')
+                );
+                allChapters = snap.docs
+                    .map(d => d.data())
+                    .sort((a, b) => (a.num || 0) - (b.num || 0));
+                buildChapterStrip();
+            } catch (err) {
+                console.warn('Could not load chapters:', err);
+                document.getElementById('chapter-btns').innerHTML =
+                    '<span style="font-size:0.8em;font-style:italic;color:#a02020;">Error loading chapters</span>';
+            }
+        }
+
+        // ── Build chapter button strip ─────────────────────────────────────
+        function buildChapterStrip() {
+            const container = document.getElementById('chapter-btns');
+            if (!allChapters.length) {
+                container.innerHTML =
+                    '<span style="font-size:0.8em;font-style:italic;opacity:0.6;">No chapter data — run the scribe first</span>';
+                return;
+            }
+            container.innerHTML = allChapters.map(ch => {
+                const label = ch.num === 0 ? 'Prologue' : `Ch ${ch.num}`;
+                return `<button class="ch-btn btn secondary" data-num="${ch.num}" title="${ch.title}">${label}</button>`;
+            }).join('');
+            container.querySelectorAll('.ch-btn').forEach(btn => {
+                btn.onclick = () => onChapterClick(parseInt(btn.dataset.num));
+            });
+        }
+
+        // ── Chapter button clicked ─────────────────────────────────────────
+        async function onChapterClick(chNum) {
+            activeChapterNum = chNum;
+
+            document.querySelectorAll('.ch-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.num) === chNum);
+            });
+
+            const chapter = allChapters.find(c => c.num === chNum);
+            if (!chapter) return;
+
+            // 1. Left sidebar — characters IN this chapter
+            updateChapterSidebar(chapter);
+
+            // 2. Glow the region where this chapter takes place
+            glowChapterRegion(chapter);
+
+            // 3. Plot PREVIOUS chapter's characters (positions at START of this chapter)
+            document.getElementById('character-layer').innerHTML = '';
+            const prevChapter = allChapters.find(c => c.num === chNum - 1);
+            if (prevChapter) {
+                await plotChapterCharacters(prevChapter, chNum);
+            }
+        }
+
+        // ── Update left sidebar with this chapter's characters ─────────────
+        function updateChapterSidebar(chapter) {
+            document.getElementById('chapter-sidebar-title').textContent =
+                chapter.title || `Chapter ${chapter.num}`;
+
+            const chars = (chapter.characters || []).filter(c =>
+                c.status !== 'referenced_only'
+            );
+
+            document.getElementById('chapter-sidebar-sub').textContent =
+                chars.length
+                    ? `${chars.length} character${chars.length !== 1 ? 's' : ''} in this chapter`
+                    : 'No characters tracked';
+
+            const list = document.getElementById('chapter-char-list');
+            if (!chars.length) {
+                list.innerHTML =
+                    '<div style="padding:10px;font-size:0.8em;font-style:italic;color:#888;">No characters tracked.</div>';
+                return;
+            }
+
+            list.innerHTML = chars.map(c => {
+                const colour = colourForCharacter(c.name);
+                return `
+                    <div class="ch-char-row">
+                        <span class="char-swatch" style="background:${colour};flex-shrink:0;margin-top:2px;"></span>
+                        <div style="flex:1;min-width:0;">
+                            <div class="ch-char-name">${c.name}</div>
+                            <div class="ch-char-loc">${c.location_description || '—'}</div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        // ── Glow the region where this chapter takes place ─────────────────
+        function glowChapterRegion(chapter) {
+            const glowLayer = document.getElementById('glow-layer');
+            glowLayer.innerHTML = '';
+            if (!mapLedger) return;
+
+            const placed = (chapter.characters || []).filter(c =>
+                ['placed', 'group_implied', 'vague'].includes(c.status) && c.location_description
+            );
+            if (!placed.length) return;
+
+            const locations = placed.map(c => c.location_description.toLowerCase());
+
+            // Score each named polygon against character location descriptions
+            let bestPolygon = null, bestScore = 0;
+            mapLedger.polygons.filter(p => p.name).forEach(poly => {
+                const words = poly.name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+                const score = locations.reduce((sum, loc) =>
+                    sum + words.filter(w => loc.includes(w)).length, 0);
+                if (score > bestScore) { bestScore = score; bestPolygon = poly; }
+            });
+
+            if (bestPolygon && bestScore > 0) {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                el.setAttribute('points', bestPolygon.coords.map(c => `${c.x},${c.y}`).join(' '));
+                el.classList.add('glow-polygon');
+                glowLayer.appendChild(el);
+                return;
+            }
+
+            // Fall back: match against settlement point names, draw a glowing circle
+            let bestPoint = null; bestScore = 0;
+            mapLedger.points.forEach(pt => {
+                const words = (pt.name || '').toLowerCase().split(/\s+/).filter(w => w.length > 2);
+                const score = locations.reduce((sum, loc) =>
+                    sum + words.filter(w => loc.includes(w)).length, 0);
+                if (score > bestScore) { bestScore = score; bestPoint = pt; }
+            });
+
+            if (bestPoint && bestScore > 0) {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                el.setAttribute('cx', bestPoint.x);
+                el.setAttribute('cy', bestPoint.y);
+                el.setAttribute('r', '10');
+                el.classList.add('glow-circle');
+                glowLayer.appendChild(el);
+            }
+        }
+
+        // ── Plot previous chapter's characters as tiny diamond symbols ──────
+        async function plotChapterCharacters(chapter, forChapterNum) {
+            // Use cache if we already resolved this chapter
+            if (pass2Cache[chapter.num]) {
+                renderPreviousCharacters(pass2Cache[chapter.num]);
+                return;
+            }
+
+            const placeables = (chapter.characters || []).filter(c =>
+                ['placed', 'vague', 'group_implied'].includes(c.status) && c.location_description
+            );
+            if (!placeables.length) return;
+
+            setStatus(`Locating ${placeables.length} character(s) from previous chapter…`);
+            const placements = [];
+
+            for (const char of placeables) {
+                if (activeChapterNum !== forChapterNum) return; // user clicked elsewhere
+                const colour = colourForCharacter(char.name);
+                try {
+                    const raw    = await callAI(buildPass2Prompt(char.name, char.location_description),
+                                                `Place ${char.name}.`);
+                    const result = JSON.parse(raw);
+                    const x = parseFloat(result.x), y = parseFloat(result.y);
+                    if (!isNaN(x) && !isNaN(y)) placements.push({ name: char.name, x, y, colour });
+                } catch (err) {
+                    console.warn(`Could not place ${char.name}:`, err.message);
+                }
+            }
+
+            pass2Cache[chapter.num] = placements;
+            if (activeChapterNum === forChapterNum) {
+                renderPreviousCharacters(placements);
+                setStatus(`${placements.length} character(s) plotted from previous chapter.`, 5000);
+            }
+        }
+
+        // ── Render previous-chapter characters as small diamonds ───────────
+        function renderPreviousCharacters(placements) {
+            const layer = document.getElementById('character-layer');
+            layer.innerHTML = '';
+            placements.forEach(({ name, x, y, colour }) => {
+                const g  = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                const sz = 1.6;
+                const d  = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                d.setAttribute('points',
+                    `${x},${y-sz} ${x+sz},${y} ${x},${y+sz} ${x-sz},${y}`);
+                d.setAttribute('fill', colour);
+                d.setAttribute('stroke', 'white');
+                d.setAttribute('stroke-width', '0.4');
+                d.setAttribute('opacity', '0.85');
+
+                const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                t.setAttribute('x', x);
+                t.setAttribute('y', parseFloat(y) + 4.5);
+                t.setAttribute('text-anchor', 'middle');
+                t.setAttribute('font-size', '2.4');
+                t.setAttribute('font-weight', 'bold');
+                t.setAttribute('fill', colour);
+                t.setAttribute('stroke', 'white');
+                t.setAttribute('stroke-width', '0.35');
+                t.setAttribute('paint-order', 'stroke');
+                t.setAttribute('opacity', '0.85');
+                t.textContent = name;
+
+                g.appendChild(d); g.appendChild(t);
+                layer.appendChild(g);
+            });
+
+            if (!charsVisible) {
+                charsVisible = true;
+                characterSvg.classList.remove('layer-hidden');
+                toggleChars.classList.add('active');
+            }
+        }
+
+        // ── Init ───────────────────────────────────────────────────────────
+        window.onload = () => {
+            layoutViewport();
+            loadAllBooks();
+        };
+
+    </script>
+</body>
+</html>

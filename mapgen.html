@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v2.9 | mapgen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+        /* ── Slim top bar ─────────────────────────────────────────────────── */
+        .top-bar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 300;
+            background: var(--aged-parchment);
+            border-bottom: 2px solid var(--earth-brown);
+            padding: 5px 10px;
+            display: flex; align-items: center; gap: 6px;
+            flex-wrap: nowrap; overflow-x: auto;
+        }
+        .tb-sep {
+            width: 1px; height: 20px; flex-shrink: 0;
+            background: var(--earth-brown); opacity: 0.35;
+        }
+        .tb-label { font-size: 0.76em; white-space: nowrap; flex-shrink: 0; }
+        .btn { padding: 4px 9px; font-size: 0.82em; white-space: nowrap; cursor: pointer; }
+        .btn.active { background-color: var(--moss-green); outline: 2px solid var(--iron-ink); }
+        select.btn { font-family: inherit; cursor: pointer; }
+
+        /* ── Left sidebar — drawing palette ───────────────────────────────── */
+        #sidebar {
+            position: fixed; left: 0; bottom: 0; z-index: 200;
+            width: 140px;
+            background: var(--aged-parchment);
+            border-right: 2px solid var(--earth-brown);
+            overflow-y: auto; overflow-x: hidden;
+            display: flex; flex-direction: column;
+        }
+        .sb-section { padding: 7px 7px 4px; border-bottom: 1px solid rgba(106,79,75,0.22); }
+        .sb-heading {
+            font-family: 'Cinzel', serif; font-size: 0.64em; font-weight: 700;
+            color: var(--earth-brown); text-transform: uppercase; letter-spacing: 0.08em;
+            margin: 0 0 5px 0;
+        }
+        .sb-btn {
+            display: flex; align-items: center; gap: 6px;
+            width: 100%; padding: 5px 6px; margin-bottom: 2px;
+            font-size: 0.82em; text-align: left; cursor: pointer;
+            background: none; border: 1px solid transparent; border-radius: 3px;
+            font-family: inherit; color: var(--iron-ink); box-sizing: border-box;
+        }
+        .sb-btn:hover { background: rgba(106,79,75,0.09); border-color: rgba(106,79,75,0.28); }
+        .sb-btn.active {
+            background-color: var(--moss-green);
+            border-color: var(--iron-ink); outline: 1px solid var(--iron-ink);
+        }
+        /* Colour swatch */
+        .sw { flex-shrink: 0; border: 1px solid rgba(0,0,0,0.18); }
+        .sw-box  { width: 12px; height: 12px; border-radius: 2px; }
+        .sw-line { width: 18px; height: 3px;  border-radius: 1px; border: none; }
+        .sw-dot  { width: 11px; height: 11px; border-radius: 50%; }
+
+        /* Remove button — subtle red tint */
+        .sb-remove { color: rgba(160,30,30,0.9); }
+        .sb-remove:hover { background: rgba(180,30,30,0.08); border-color: rgba(160,30,30,0.3); }
+        .sb-remove.active { background: rgba(200,50,50,0.15); border-color: rgba(160,30,30,0.6); outline-color: rgba(160,30,30,0.6); }
+
+        /* ── Status bar — right of sidebar ────────────────────────────────── */
+        .status-bar {
+            position: fixed; left: 140px; right: 0; z-index: 199;
+            text-align: center; font-style: italic; font-size: 0.78em;
+            color: var(--iron-ink); background: var(--aged-parchment);
+            border-bottom: 1px solid rgba(106,79,75,0.3);
+            padding: 4px 10px; min-height: 1.1em;
+        }
+
+        /* ── Map viewport — right of sidebar ──────────────────────────────── */
+        #map-viewport {
+            position: fixed; left: 140px; right: 0; bottom: 0;
+            overflow: hidden; user-select: none; background: #1e1e2e;
+        }
+        #map-wrapper { position: absolute; transform-origin: 0 0; }
+        #map-content {
+            position: relative; display: inline-block; line-height: 0;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+            border: 3px solid var(--earth-brown);
+        }
+        #map-image { display: block; -webkit-user-drag: none; }
+        #map-svg   { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+        /* Remove mode */
+        #map-svg.remove-mode               { pointer-events: auto; }
+        #map-svg.remove-mode .removable    { cursor: pointer; pointer-events: all; }
+        #map-svg.remove-mode .removable:hover {
+            opacity: 0.6; filter: drop-shadow(0 0 2px rgba(200,0,0,0.9));
+        }
+
+        #active-line { fill: none; stroke-width: 1; stroke-dasharray: 3,2; }
+
+        /* Polygon fills */
+        .poly-land      { fill: rgba(210,185,110,0.35); stroke: rgba(160,120,40,0.85);  stroke-width: 0.8; }
+        .poly-forest    { fill: rgba(50,120,50,0.35);   stroke: rgba(20,80,20,0.85);    stroke-width: 0.8; }
+        .poly-water     { fill: rgba(60,130,220,0.35);  stroke: rgba(20,70,180,0.85);   stroke-width: 0.8; }
+        .poly-mountains { fill: rgba(155,135,105,0.35); stroke: rgba(100,80,50,0.90);   stroke-width: 0.9; }
+        .poly-hills     { fill: rgba(175,165,100,0.35); stroke: rgba(130,115,55,0.85);  stroke-width: 0.8; }
+        .poly-plains    { fill: rgba(190,210,130,0.35); stroke: rgba(130,155,60,0.85);  stroke-width: 0.8; }
+        .poly-desert    { fill: rgba(215,185,90,0.35);  stroke: rgba(185,150,40,0.85);  stroke-width: 0.8; }
+        .poly-swamp     { fill: rgba(70,95,45,0.35);    stroke: rgba(40,65,15,0.85);    stroke-width: 0.8; }
+        .poly-marsh     { fill: rgba(70,130,90,0.35);   stroke: rgba(20,95,50,0.85);    stroke-width: 0.8; }
+        .poly-tundra    { fill: rgba(200,220,235,0.35); stroke: rgba(140,165,185,0.85); stroke-width: 0.8; }
+        .poly-unnamed { stroke-dasharray: 1.5,0.8; opacity: 0.65; }
+        .path-unnamed { stroke-dasharray: 2,1;     opacity: 0.65; }
+
+        /* Path strokes */
+        .path-road   { fill: none; stroke: rgba(180,110,30,0.95); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+        .path-river  { fill: none; stroke: rgba(40,110,220,0.90); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+        .path-trail  { fill: none; stroke: rgba(150,90,30,0.75);  stroke-width: 1.0; stroke-dasharray: 3,2; stroke-linejoin: round; stroke-linecap: round; }
+        .path-wall   { fill: none; stroke: rgba(90,85,75,0.95);   stroke-width: 2.8; stroke-linejoin: round; stroke-linecap: square; }
+        .path-tunnel { fill: none; stroke: rgba(70,50,35,0.85);   stroke-width: 1.4; stroke-dasharray: 1,1.5; stroke-linejoin: round; stroke-linecap: round; }
+
+        /* Point dots */
+        .pt-circle     { stroke: white; stroke-width: 0.6; fill: rgba(210,40,40,0.90); }
+        .pt-settlement { fill: rgba(210,40,40,0.90); }
+        .pt-castle     { fill: rgba(60,80,160,0.90); }
+        .pt-ruin       { fill: rgba(110,85,60,0.90); }
+        .pt-landmark   { fill: rgba(130,50,170,0.90); }
+        .pt-mine       { fill: rgba(60,55,50,0.90); }
+        .pt-label      { font-size: 2.2px; fill: rgba(80,20,20,0.95); stroke: white; stroke-width: 0.4; paint-order: stroke; }
+
+        /* Coord display */
+        .coord-display {
+            position: fixed; bottom: 10px; right: 10px; z-index: 300;
+            background: rgba(0,0,0,0.65); color: #eee;
+            padding: 5px 10px; border-radius: 4px;
+            font-family: monospace; font-size: 0.78em; pointer-events: none;
+        }
+
+        /* ── Modal ────────────────────────────────────────────────────────── */
+        #modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0,0,0,0.55); align-items: center; justify-content: center;
+        }
+        #modal-overlay.open { display: flex; }
+        #modal-box {
+            background: var(--aged-parchment); border: 2px solid var(--earth-brown);
+            border-radius: 6px; padding: 20px 24px;
+            min-width: 320px; max-width: 500px; width: 92%;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5); max-height: 82vh; overflow-y: auto;
+        }
+        #modal-title-bar {
+            font-family: 'Cinzel', serif; font-size: 0.78em; font-weight: 700;
+            color: var(--earth-brown); text-transform: uppercase; letter-spacing: 0.08em;
+            margin: 0 0 14px 0;
+        }
+        #modal-buttons {
+            display: flex; gap: 8px; justify-content: flex-end;
+            margin-top: 16px; border-top: 1px solid rgba(106,79,75,0.2); padding-top: 14px;
+        }
+        .modal-label { display: block; font-size: 0.85em; margin: 10px 0 4px; color: var(--earth-brown); }
+        .modal-field {
+            width: 100%; box-sizing: border-box; padding: 6px 8px;
+            border: 1px solid var(--earth-brown); background: rgba(255,255,255,0.65);
+            font-family: inherit; font-size: 0.9em; border-radius: 3px; color: var(--iron-ink);
+        }
+        .modal-note { font-size: 0.8em; font-style: italic; opacity: 0.75; margin-top: 10px; line-height: 1.45; }
+        .modal-info {
+            font-size: 0.85em; margin-top: 10px; padding: 7px 10px;
+            background: rgba(0,0,0,0.06); border-radius: 3px;
+            border: 1px solid rgba(106,79,75,0.15);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Slim top bar ─────────────────────────────────────────────────── -->
+    <div class="top-bar" id="top-bar">
+
+        <a id="back-btn" href="index.html" class="btn secondary">← tome</a>
+
+        <div class="tb-sep"></div>
+        <span class="tb-label">Map:</span>
+        <select id="map-select" class="btn secondary"><option value="">loading…</option></select>
+        <button id="edit-map-info-btn" class="btn secondary" title="Edit map title &amp; source">✎</button>
+        <button id="fit-btn" class="btn secondary" title="Fit map to screen">⊡</button>
+
+        <div class="tb-sep"></div>
+        <span class="tb-label">Version:</span>
+        <select id="version-select" class="btn secondary"><option value="original">Original</option></select>
+        <button id="set-preferred-btn" class="btn secondary" title="Set as preferred version">★</button>
+        <button id="add-alt-btn" class="btn secondary" title="Upload an alternate map image">+ alt</button>
+        <input type="file" id="alt-file-input" accept="image/*" style="display:none">
+
+        <div class="tb-sep"></div>
+        <button id="import-overlay-btn" class="btn secondary" title="Copy overlay from another book">import overlay</button>
+
+        <div class="tb-sep"></div>
+        <button id="toggle-overlay-btn" class="btn secondary active" title="Show / hide overlay">overlay ●</button>
+        <button id="undo-btn"  class="btn secondary">undo</button>
+        <button id="save-btn"  class="btn">save</button>
+
+    </div>
+
+    <!-- ── Left sidebar ─────────────────────────────────────────────────── -->
+    <div id="sidebar">
+
+        <div class="sb-section">
+            <p class="sb-heading">Regions</p>
+            <button class="sb-btn tool" data-type="polygon" data-label="land"><span class="sw sw-box" style="background:rgba(210,185,110,0.8)"></span>land</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="forest"><span class="sw sw-box" style="background:rgba(50,120,50,0.8)"></span>forest</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="water"><span class="sw sw-box" style="background:rgba(60,130,220,0.8)"></span>water</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="mountains"><span class="sw sw-box" style="background:rgba(155,135,105,0.8)"></span>mountains</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="hills"><span class="sw sw-box" style="background:rgba(175,165,100,0.8)"></span>hills</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="plains"><span class="sw sw-box" style="background:rgba(190,210,130,0.8)"></span>plains</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="desert"><span class="sw sw-box" style="background:rgba(215,185,90,0.8)"></span>desert</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="swamp"><span class="sw sw-box" style="background:rgba(70,95,45,0.8)"></span>swamp</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="marsh"><span class="sw sw-box" style="background:rgba(70,130,90,0.8)"></span>marsh</button>
+            <button class="sb-btn tool" data-type="polygon" data-label="tundra"><span class="sw sw-box" style="background:rgba(200,220,235,0.8)"></span>tundra</button>
+        </div>
+
+        <div class="sb-section">
+            <p class="sb-heading">Paths</p>
+            <button class="sb-btn tool" data-type="path" data-label="road"><span class="sw sw-line" style="background:rgba(180,110,30,0.95)"></span>road</button>
+            <button class="sb-btn tool" data-type="path" data-label="river"><span class="sw sw-line" style="background:rgba(40,110,220,0.9)"></span>river</button>
+            <button class="sb-btn tool" data-type="path" data-label="trail"><span class="sw sw-line" style="background:rgba(150,90,30,0.75); background-image: repeating-linear-gradient(90deg, rgba(150,90,30,0.75) 0 4px, transparent 4px 7px)"></span>trail</button>
+            <button class="sb-btn tool" data-type="path" data-label="wall"><span class="sw sw-line" style="background:rgba(90,85,75,0.95); height:5px"></span>wall</button>
+            <button class="sb-btn tool" data-type="path" data-label="tunnel"><span class="sw sw-line" style="background-image: repeating-linear-gradient(90deg, rgba(70,50,35,0.85) 0 2px, transparent 2px 4px)"></span>tunnel</button>
+        </div>
+
+        <div class="sb-section">
+            <p class="sb-heading">Points</p>
+            <button class="sb-btn tool" data-type="point" data-label="settlement"><span class="sw sw-dot" style="background:rgba(210,40,40,0.9)"></span>settlement</button>
+            <button class="sb-btn tool" data-type="point" data-label="castle"><span class="sw sw-dot" style="background:rgba(60,80,160,0.9)"></span>castle</button>
+            <button class="sb-btn tool" data-type="point" data-label="ruin"><span class="sw sw-dot" style="background:rgba(110,85,60,0.9)"></span>ruin</button>
+            <button class="sb-btn tool" data-type="point" data-label="landmark"><span class="sw sw-dot" style="background:rgba(130,50,170,0.9)"></span>landmark</button>
+            <button class="sb-btn tool" data-type="point" data-label="mine"><span class="sw sw-dot" style="background:rgba(60,55,50,0.9)"></span>mine</button>
+        </div>
+
+        <div class="sb-section">
+            <p class="sb-heading">Edit</p>
+            <button id="remove-btn" class="sb-btn sb-remove" title="Click a feature on the map to remove it">✕ remove</button>
+        </div>
+
+    </div>
+
+    <!-- ── Status bar ───────────────────────────────────────────────────── -->
+    <div class="status-bar" id="status-bar">Select a tool to begin  ·  Drag to pan  ·  Scroll to zoom</div>
+
+    <!-- ── Map viewport ─────────────────────────────────────────────────── -->
+    <div id="map-viewport">
+        <div id="map-wrapper">
+            <div id="map-content">
+                <img id="map-image" src="" alt="" draggable="false">
+                <svg id="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                        <marker id="river-arrow" markerWidth="4" markerHeight="4"
+                                refX="3.5" refY="2" orient="auto" markerUnits="userSpaceOnUse">
+                            <polygon points="0,0 4,2 0,4" fill="rgba(40,110,220,0.90)"/>
+                        </marker>
+                    </defs>
+                    <g id="polygon-layer"></g>
+                    <g id="path-layer"></g>
+                    <g id="point-layer"></g>
+                    <polyline id="active-line" points=""></polyline>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="coord-display">
+        <span id="current-mode">none</span> &nbsp;|&nbsp; X:<span id="coord-x">0</span> Y:<span id="coord-y">0</span>
+    </div>
+
+    <!-- ── Modal ────────────────────────────────────────────────────────── -->
+    <div id="modal-overlay">
+        <div id="modal-box">
+            <div id="modal-title-bar"></div>
+            <div id="modal-body"></div>
+            <div id="modal-buttons"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db, storage, uploadartifact } from './firebase.js';
+        import {
+            doc, getDoc, getDocs, setDoc, updateDoc, collection
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // ── URL params ──────────────────────────────────────────────────────
+        const qp     = new URLSearchParams(window.location.search);
+        const userid = qp.get('u'), author = qp.get('a'),
+              series = qp.get('s'), bookid = qp.get('b');
+        document.getElementById('back-btn').href =
+            `mybook.html?u=${userid}&a=${author}&s=${series}&b=${bookid}`;
+
+        // ── DOM refs ────────────────────────────────────────────────────────
+        const topBar           = document.getElementById('top-bar');
+        const sidebar          = document.getElementById('sidebar');
+        const statusEl         = document.getElementById('status-bar');
+        const viewport         = document.getElementById('map-viewport');
+        const mapWrapper       = document.getElementById('map-wrapper');
+        const mapContent       = document.getElementById('map-content');
+        const mapImage         = document.getElementById('map-image');
+        const mapSvg           = document.getElementById('map-svg');
+        const activeLine       = document.getElementById('active-line');
+        const coordX           = document.getElementById('coord-x');
+        const coordY           = document.getElementById('coord-y');
+        const modeDisplay      = document.getElementById('current-mode');
+        const mapSelect        = document.getElementById('map-select');
+        const versionSelect    = document.getElementById('version-select');
+        const toggleOverlayBtn = document.getElementById('toggle-overlay-btn');
+        const removeBtn        = document.getElementById('remove-btn');
+        const setPreferredBtn  = document.getElementById('set-preferred-btn');
+        const addAltBtn        = document.getElementById('add-alt-btn');
+
+        // ── Constants ───────────────────────────────────────────────────────
+        const SIDEBAR_W = 140;  // must match CSS width of #sidebar
+
+        const SOURCE_OPTIONS = [
+            { value: 'epub',       label: 'epub (extracted from ebook)' },
+            { value: 'download',   label: 'download (from internet)' },
+            { value: 'self-drawn', label: 'self-drawn' },
+            { value: 'other',      label: 'other…' },
+        ];
+
+        const PREVIEW_COLOUR = {
+            land:'rgba(160,120,40,0.9)',      forest:'rgba(20,80,20,0.9)',
+            water:'rgba(20,70,180,0.9)',       mountains:'rgba(100,80,50,0.9)',
+            hills:'rgba(130,115,55,0.9)',      plains:'rgba(130,155,60,0.9)',
+            desert:'rgba(185,150,40,0.9)',     swamp:'rgba(40,65,15,0.9)',
+            marsh:'rgba(20,95,50,0.9)',        tundra:'rgba(140,165,185,0.9)',
+            road:'rgba(180,110,30,0.95)',      river:'rgba(40,110,220,0.9)',
+            trail:'rgba(150,90,30,0.85)',      wall:'rgba(90,85,75,0.95)',
+            tunnel:'rgba(70,50,35,0.9)',
+            settlement:'rgba(210,40,40,0.9)', castle:'rgba(60,80,160,0.9)',
+            ruin:'rgba(110,85,60,0.9)',        landmark:'rgba(130,50,170,0.9)',
+            mine:'rgba(60,55,50,0.9)'
+        };
+
+        // ── State ───────────────────────────────────────────────────────────
+        let currentMode       = null, currentLabel = null;
+        let activePoints      = [];
+        let mapLedger         = { polygons: [], paths: [], points: [] };
+        let history           = [];
+        let currentMapIndex   = 0;
+        let bookMaps          = [];
+        let overlayVisible    = true;
+        let removeMode        = false;
+        let currentVersionKey = 'original';
+        let modalIsOpen       = false;
+        let isDrawingFreehand = false, freehandPoints = [];
+        const SAMPLE_DIST     = 1.0;
+        let scale = 1, panX = 0, panY = 0;
+        const BORDER = 3, MIN_SCALE = 0.02, MAX_SCALE = 15;
+
+        // ── Modal helpers ───────────────────────────────────────────────────
+        function showModal(title, bodyHtml, buttons) {
+            document.getElementById('modal-title-bar').textContent = title;
+            document.getElementById('modal-body').innerHTML = bodyHtml;
+            const btnsEl = document.getElementById('modal-buttons');
+            btnsEl.innerHTML = '';
+            buttons.forEach(b => {
+                const btn = document.createElement('button');
+                btn.textContent = b.label;
+                btn.className   = 'btn ' + (b.cls || '');
+                if (b.id)      btn.id = b.id;
+                if (b.onclick) btn.addEventListener('click', b.onclick);
+                btnsEl.appendChild(btn);
+            });
+            document.getElementById('modal-overlay').classList.add('open');
+            modalIsOpen = true;
+        }
+        function hideModal() {
+            document.getElementById('modal-overlay').classList.remove('open');
+            modalIsOpen = false;
+        }
+        function sourceSelectHTML(id, current = 'epub') {
+            const opts = SOURCE_OPTIONS.map(o =>
+                `<option value="${o.value}"${current===o.value?' selected':''}>${o.label}</option>`
+            ).join('');
+            return `<select id="${id}" class="modal-field" style="cursor:pointer">${opts}</select>
+                    <input id="${id}-other" type="text" class="modal-field"
+                           placeholder="Describe the source…"
+                           style="margin-top:6px;display:${current==='other'?'block':'none'}">`;
+        }
+        function wireOtherToggle(selectId) {
+            const el = document.getElementById(selectId);
+            if (el) el.addEventListener('change', function() {
+                document.getElementById(selectId+'-other').style.display =
+                    this.value === 'other' ? 'block' : 'none';
+            });
+        }
+        function readSource(selectId) {
+            const val = document.getElementById(selectId).value;
+            if (val === 'other') {
+                const txt = (document.getElementById(selectId+'-other').value||'').trim();
+                return txt || 'other';
+            }
+            return val;
+        }
+
+        // ── Status bar ──────────────────────────────────────────────────────
+        let statusTimer = null;
+        function getInstruction() {
+            if (removeMode)
+                return 'Remove mode — click any feature on the map to delete it  ·  Click "✕ remove" again to exit.';
+            if (!currentMode)
+                return 'Select a tool from the sidebar  ·  Drag to pan  ·  Scroll to zoom  ·  ⊡ to fit';
+            if (currentMode === 'polygon')
+                return `Click and drag to draw a ${currentLabel} region  ·  Release to finish.`;
+            if (currentMode === 'path') {
+                if (currentLabel === 'river')
+                    return activePoints.length === 0
+                        ? 'Rivers flow source → mouth — click to place the SOURCE (headwaters) first.'
+                        : `Tracing river (${activePoints.length} pts) — right-click at the MOUTH to finish.`;
+                return activePoints.length === 0
+                    ? `Click to start the ${currentLabel}.`
+                    : `Keep clicking to extend  ·  Right-click to finish the ${currentLabel}.`;
+            }
+            if (currentMode === 'point') return `Click on the map to place a ${currentLabel}.`;
+            return '';
+        }
+        function setStatus(msg, duration) {
+            if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
+            statusEl.textContent = msg !== undefined ? msg : getInstruction();
+            if (duration) statusTimer = setTimeout(() => setStatus(), duration);
+        }
+
+        // ── Layout ──────────────────────────────────────────────────────────
+        function layoutViewport() {
+            const tbH = topBar.offsetHeight;
+            const sbH = statusEl.offsetHeight;
+            sidebar.style.top  = tbH + 'px';
+            statusEl.style.top = tbH + 'px';
+            viewport.style.top = (tbH + sbH) + 'px';
+        }
+
+        // ── Pan / zoom ──────────────────────────────────────────────────────
+        function applyPanZoom() {
+            mapWrapper.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+        }
+        function fitMap() {
+            const vw = viewport.clientWidth, vh = viewport.clientHeight;
+            const iw = mapImage.naturalWidth || 800, ih = mapImage.naturalHeight || 600;
+            if (!iw || !ih) return;
+            const cw = iw + 2*BORDER, ch = ih + 2*BORDER;
+            scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.min(vw/cw, vh/ch) * 0.97));
+            panX  = vw/2 - cw/2 * scale;
+            panY  = vh/2 - ch/2 * scale;
+            applyPanZoom();
+        }
+        function getCoords(e) {
+            const r = mapImage.getBoundingClientRect();
+            return [
+                parseFloat(((e.clientX - r.left) / r.width  * 100).toFixed(2)),
+                parseFloat(((e.clientY - r.top)  / r.height * 100).toFixed(2))
+            ];
+        }
+
+        // ── Version / overlay key helpers ────────────────────────────────────
+        function currentOverlayKey() {
+            return currentVersionKey === 'original'
+                ? `map_${currentMapIndex}`
+                : `map_${currentMapIndex}_${currentVersionKey}`;
+        }
+        function currentMapUrl() {
+            const map = bookMaps[currentMapIndex];
+            if (currentVersionKey === 'original') return map.url;
+            const i = parseInt(currentVersionKey.replace('alt_',''));
+            return (map.alternates||[])[i]?.url || map.url;
+        }
+        function resolveOverlayKey(map, mapIdx) {
+            const pref = map.preferred || 'original';
+            return pref === 'original' ? `map_${mapIdx}` : `map_${mapIdx}_${pref}`;
+        }
+
+        // ── Version selector ──────────────────────────────────────────────────
+        function refreshVersionSelect(map) {
+            const preferred = map.preferred || 'original';
+            let html = `<option value="original">${preferred==='original'?'★ ':''}Original · ${map.source||'epub'}</option>`;
+            (map.alternates||[]).forEach((alt,i) => {
+                const key = `alt_${i}`;
+                html += `<option value="${key}">${preferred===key?'★ ':''}${alt.name} · ${alt.source}</option>`;
+            });
+            versionSelect.innerHTML = html;
+            versionSelect.value = currentVersionKey;
+            updatePreferredBtn(map);
+        }
+        function updatePreferredBtn(map) {
+            const is = currentVersionKey === (map.preferred||'original');
+            setPreferredBtn.classList.toggle('active', is);
+            setPreferredBtn.title = is ? 'This is the preferred version' : 'Set as preferred version';
+        }
+        async function setPreferred() {
+            const map = bookMaps[currentMapIndex];
+            if (currentVersionKey === (map.preferred||'original')) { setStatus('Already preferred.',1500); return; }
+            map.preferred = currentVersionKey;
+            await updateBookMaps();
+            refreshVersionSelect(map);
+            setStatus('Preferred version updated.',2000);
+        }
+        async function updateBookMaps() {
+            if (!userid||!author||!series||!bookid) return;
+            await updateDoc(doc(db,'users',userid,'authors',author,'series',series,'books',bookid),{ maps: bookMaps });
+        }
+
+        // ── Auto-save ─────────────────────────────────────────────────────────
+        async function autoSave() {
+            if (!userid||!author||!series||!bookid) return;
+            try {
+                await setDoc(
+                    doc(db,'users',userid,'authors',author,'series',series,'books',bookid,'overlays',currentOverlayKey()),
+                    { ledger: mapLedger, saved: new Date().toISOString() }
+                );
+                setStatus('Saved ✓', 1500);
+            } catch(err) {
+                console.error('Auto-save failed:',err);
+                setStatus('Save failed — ' + err.message, 5000);
+            }
+        }
+
+        // ── Render overlay ────────────────────────────────────────────────────
+        function renderPermanent() {
+            document.getElementById('polygon-layer').innerHTML = '';
+            document.getElementById('path-layer').innerHTML    = '';
+            document.getElementById('point-layer').innerHTML   = '';
+
+            mapLedger.polygons.forEach((p,i) => {
+                const el = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+                el.setAttribute('points', p.coords.map(c=>`${c.x},${c.y}`).join(' '));
+                el.classList.add(`poly-${p.type}`);
+                if (p.unnamed) el.classList.add('poly-unnamed');
+                el.classList.add('removable');
+                el.dataset.arr='polygons'; el.dataset.idx=i;
+                document.getElementById('polygon-layer').appendChild(el);
+            });
+            mapLedger.paths.forEach((p,i) => {
+                const el = document.createElementNS('http://www.w3.org/2000/svg','polyline');
+                el.setAttribute('points', p.coords.map(c=>`${c.x},${c.y}`).join(' '));
+                el.classList.add(`path-${p.type}`);
+                if (p.unnamed) el.classList.add('path-unnamed');
+                if (p.type==='river') el.setAttribute('marker-end','url(#river-arrow)');
+                el.classList.add('removable');
+                el.dataset.arr='paths'; el.dataset.idx=i;
+                document.getElementById('path-layer').appendChild(el);
+            });
+            mapLedger.points.forEach((p,i) => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+                const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+                c.setAttribute('cx',p.x); c.setAttribute('cy',p.y); c.setAttribute('r',1.4);
+                c.classList.add('pt-circle',`pt-${p.type}`);
+                const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+                t.setAttribute('x',p.x); t.setAttribute('y',p.y+3.2);
+                t.setAttribute('text-anchor','middle');
+                t.classList.add('pt-label'); t.textContent = p.name;
+                g.classList.add('removable'); g.dataset.arr='points'; g.dataset.idx=i;
+                g.appendChild(c); g.appendChild(t);
+                document.getElementById('point-layer').appendChild(g);
+            });
+            if (!overlayVisible) {
+                ['polygon-layer','path-layer','point-layer'].forEach(id=>{
+                    document.getElementById(id).style.display='none';
+                });
+            }
+        }
+
+        // ── Load overlay ──────────────────────────────────────────────────────
+        async function loadCurrentOverlay() {
+            mapLedger = { polygons:[], paths:[], points:[] };
+            history=[]; activePoints=[];
+            isDrawingFreehand=false; freehandPoints=[];
+            activeLine.setAttribute('points','');
+            renderPermanent();
+            setStatus('Consulting the vault…');
+            try {
+                const snap = await getDoc(doc(db,'users',userid,'authors',author,
+                    'series',series,'books',bookid,'overlays',currentOverlayKey()));
+                if (snap.exists()) {
+                    mapLedger = snap.data().ledger || { polygons:[],paths:[],points:[] };
+                    renderPermanent();
+                    const n = mapLedger.polygons.length + mapLedger.paths.length + mapLedger.points.length;
+                    setStatus(`Overlay loaded — ${n} feature(s) ready.`, 3000);
+                } else {
+                    setStatus('No overlay yet — draw features to begin.', 3000);
+                }
+            } catch(err) {
+                console.error(err); setStatus('Error: ' + err.message);
+            }
+        }
+
+        // ── Load image then overlay ───────────────────────────────────────────
+        function pinSvgToImage() {
+            mapSvg.style.width  = mapImage.naturalWidth  + 'px';
+            mapSvg.style.height = mapImage.naturalHeight + 'px';
+        }
+        async function loadVersionImage() {
+            const url = currentMapUrl();
+            await new Promise(resolve => {
+                let h = false;
+                const done = () => { if(h) return; h=true; pinSvgToImage(); setTimeout(()=>{fitMap();resolve();},50); };
+                mapImage.onload = done;
+                mapImage.src    = url;
+                if (mapImage.complete && mapImage.naturalWidth > 0) done();
+            });
+        }
+        async function loadMapByIndex(index) {
+            currentMapIndex   = index;
+            currentVersionKey = bookMaps[index].preferred || 'original';
+            refreshVersionSelect(bookMaps[index]);
+            await loadVersionImage();
+            await loadCurrentOverlay();
+        }
+        async function switchVersion(key) {
+            currentVersionKey = key;
+            versionSelect.value = key;
+            updatePreferredBtn(bookMaps[currentMapIndex]);
+            activePoints=[]; isDrawingFreehand=false; freehandPoints=[];
+            activeLine.setAttribute('points','');
+            await loadVersionImage();
+            await loadCurrentOverlay();
+        }
+
+        // ── Edit map title & source ───────────────────────────────────────────
+        function editMapInfo() {
+            const map = bookMaps[currentMapIndex];
+            showModal('Map Info', `
+                <label class="modal-label">Map title (as referred to in the book):</label>
+                <input id="mi-title" type="text" class="modal-field" value="${(map.name||'').replace(/"/g,'&quot;')}">
+                <label class="modal-label">Source of the original map:</label>
+                ${sourceSelectHTML('mi-source', map.source||'epub')}
+                <p class="modal-note">Title and source apply to all versions of this map.</p>
+            `, [
+                { label:'Save', onclick: async () => {
+                    const title = document.getElementById('mi-title').value.trim();
+                    const src   = readSource('mi-source');
+                    if (!title) { setStatus('Please enter a map title.',2000); return; }
+                    bookMaps[currentMapIndex].name   = title;
+                    bookMaps[currentMapIndex].source = src;
+                    await updateBookMaps();
+                    mapSelect.options[currentMapIndex].text = title;
+                    refreshVersionSelect(bookMaps[currentMapIndex]);
+                    hideModal(); setStatus('Map info saved.',2000);
+                }},
+                { label:'Cancel', cls:'secondary', onclick: hideModal }
+            ]);
+            wireOtherToggle('mi-source');
+        }
+
+        // ── Add alternate map ─────────────────────────────────────────────────
+        function addAlternate() {
+            showModal('Add Alternate Map', `
+                <label class="modal-label">Name for this alternate:</label>
+                <input id="aa-name" type="text" class="modal-field" placeholder="e.g. HD version, coloured edition…">
+                <label class="modal-label">Source:</label>
+                ${sourceSelectHTML('aa-source','download')}
+                <label class="modal-label">Map image file:</label>
+                <div style="margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <button id="aa-choose" class="btn secondary" type="button">Choose image…</button>
+                    <span id="aa-filename" style="font-size:0.82em; font-style:italic; color:var(--earth-brown);">No file chosen</span>
+                </div>
+                <input type="file" id="aa-file" accept="image/*" style="display:none">
+                <p class="modal-note">The image is uploaded to the vault. A fresh overlay starts for this version and it becomes preferred.</p>
+            `, [
+                { label:'Upload & use', id:'aa-submit', onclick: async () => {
+                    const name = document.getElementById('aa-name').value.trim();
+                    const src  = readSource('aa-source');
+                    const file = document.getElementById('aa-file').files[0];
+                    if (!name) { setStatus('Please give the alternate a name.',2000); return; }
+                    if (!file) { setStatus('Please choose an image file.',2000); return; }
+                    const map    = bookMaps[currentMapIndex];
+                    const altIdx = (map.alternates||[]).length;
+                    const altKey = `alt_${altIdx}`;
+                    const storagePath = `users/${userid}/authors/${author}/series/${series}/books/${bookid}/maps/map_${currentMapIndex}_${altKey}`;
+                    hideModal();
+                    setStatus('Uploading map image…');
+                    try {
+                        const url = await uploadartifact(storagePath, file);
+                        if (!url) throw new Error('Upload returned no URL.');
+                        if (!map.alternates) map.alternates = [];
+                        map.alternates.push({ name, source:src, url, overlayKey:`map_${currentMapIndex}_${altKey}` });
+                        map.preferred = altKey;
+                        await updateBookMaps();
+                        currentVersionKey = altKey;
+                        refreshVersionSelect(map);
+                        await loadVersionImage();
+                        await loadCurrentOverlay();
+                        setStatus(`"${name}" added and set as preferred.`,3000);
+                    } catch(err) {
+                        console.error(err); setStatus('Upload failed: '+err.message,5000);
+                    }
+                }},
+                { label:'Cancel', cls:'secondary', onclick: hideModal }
+            ]);
+            wireOtherToggle('aa-source');
+            document.getElementById('aa-choose').onclick = () => document.getElementById('aa-file').click();
+            document.getElementById('aa-file').onchange = function() {
+                document.getElementById('aa-filename').textContent = this.files[0]?.name || 'No file chosen';
+            };
+        }
+
+        // ── Import overlay from another book ──────────────────────────────────
+        async function importOverlay() {
+            if (!userid) { setStatus('No book reference.',3000); return; }
+            showModal('Import Overlay from Another Book',
+                `<p style="font-size:0.88em;font-style:italic;">Searching the vault…</p>`,
+                [{ label:'Cancel', cls:'secondary', onclick:hideModal }]
+            );
+            try {
+                const authSnap = await getDocs(collection(db,'users',userid,'authors'));
+                const sources = [];
+                for (const aDoc of authSnap.docs) {
+                    const sSnap = await getDocs(collection(db,'users',userid,'authors',aDoc.id,'series'));
+                    for (const sDoc of sSnap.docs) {
+                        const bSnap = await getDocs(collection(db,'users',userid,'authors',aDoc.id,'series',sDoc.id,'books'));
+                        for (const bDoc of bSnap.docs) {
+                            if (aDoc.id===author && sDoc.id===series && bDoc.id===bookid) continue;
+                            const data = bDoc.data();
+                            if (Array.isArray(data.maps) && data.maps.length > 0)
+                                sources.push({ authorId:aDoc.id, seriesId:sDoc.id, bookId:bDoc.id,
+                                               title:data.title||bDoc.id, maps:data.maps });
+                        }
+                    }
+                }
+                if (sources.length === 0) {
+                    document.getElementById('modal-body').innerHTML =
+                        `<p style="font-size:0.88em;">No other mapped books found in your library yet.</p>`;
+                    return;
+                }
+                document.getElementById('modal-body').innerHTML = `
+                    <label class="modal-label">Source book:</label>
+                    <select id="io-book" class="modal-field" style="cursor:pointer">
+                        <option value="">— select a book —</option>
+                        ${sources.map((s,i)=>`<option value="${i}">${s.title}</option>`).join('')}
+                    </select>
+                    <div id="io-map-row" style="display:none">
+                        <label class="modal-label">Source map:</label>
+                        <select id="io-map" class="modal-field" style="cursor:pointer"></select>
+                        <div id="io-info" class="modal-info"></div>
+                    </div>
+                    <p class="modal-note">Copies the overlay into this map version. The source book is unchanged.</p>
+                `;
+                const btnsEl = document.getElementById('modal-buttons');
+                const copyBtn = document.createElement('button');
+                copyBtn.textContent='Copy into this map'; copyBtn.className='btn'; copyBtn.disabled=true;
+                copyBtn.addEventListener('click', async () => {
+                    const bIdx=parseInt(document.getElementById('io-book').value);
+                    const mIdx=parseInt(document.getElementById('io-map').value);
+                    if (isNaN(bIdx)||isNaN(mIdx)) return;
+                    await doImportOverlay(sources[bIdx],mIdx);
+                });
+                btnsEl.insertBefore(copyBtn, btnsEl.firstChild);
+
+                async function loadOverlayInfo(src, mIdx) {
+                    document.getElementById('io-info').textContent='Checking…';
+                    copyBtn.disabled=true;
+                    try {
+                        const key  = resolveOverlayKey(src.maps[mIdx],mIdx);
+                        const snap = await getDoc(doc(db,'users',userid,'authors',src.authorId,
+                            'series',src.seriesId,'books',src.bookId,'overlays',key));
+                        if (snap.exists()) {
+                            const l = snap.data().ledger||{polygons:[],paths:[],points:[]};
+                            const n = l.polygons.length+l.paths.length+l.points.length;
+                            document.getElementById('io-info').textContent=`✓ ${n} feature(s) — ready to copy.`;
+                            copyBtn.disabled=false;
+                        } else {
+                            document.getElementById('io-info').textContent='No overlay found for this map.';
+                        }
+                    } catch(e) { document.getElementById('io-info').textContent='Error: '+e.message; }
+                }
+
+                document.getElementById('io-book').onchange = function() {
+                    const bIdx=parseInt(this.value);
+                    if (isNaN(bIdx)) { document.getElementById('io-map-row').style.display='none'; copyBtn.disabled=true; return; }
+                    const src=sources[bIdx];
+                    document.getElementById('io-map').innerHTML=src.maps.map((m,i)=>
+                        `<option value="${i}">${m.name||'Map '+(i+1)}</option>`).join('');
+                    document.getElementById('io-map-row').style.display='block';
+                    loadOverlayInfo(src,0);
+                    document.getElementById('io-map').onchange=function(){ loadOverlayInfo(src,parseInt(this.value)); };
+                };
+            } catch(err) {
+                document.getElementById('modal-body').innerHTML=`<p style="color:#a02020;">Error: ${err.message}</p>`;
+            }
+        }
+
+        async function doImportOverlay(sourceBook, sourceMapIdx) {
+            hideModal(); setStatus('Importing overlay…');
+            try {
+                const key  = resolveOverlayKey(sourceBook.maps[sourceMapIdx],sourceMapIdx);
+                const snap = await getDoc(doc(db,'users',userid,'authors',sourceBook.authorId,
+                    'series',sourceBook.seriesId,'books',sourceBook.bookId,'overlays',key));
+                if (!snap.exists()) { setStatus('Source overlay not found.',3000); return; }
+                mapLedger = snap.data().ledger || {polygons:[],paths:[],points:[]};
+                activePoints=[]; isDrawingFreehand=false; freehandPoints=[];
+                activeLine.setAttribute('points',''); history=[];
+                await autoSave(); renderPermanent();
+                const n = mapLedger.polygons.length+mapLedger.paths.length+mapLedger.points.length;
+                setStatus(`Imported ${n} feature(s) from "${sourceBook.title}".`,4000);
+            } catch(err) { console.error(err); setStatus('Import failed: '+err.message,5000); }
+        }
+
+        // ── Mouse wheel zoom ──────────────────────────────────────────────────
+        viewport.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            let delta = e.deltaY;
+            if (e.deltaMode===1) delta*=20;
+            if (e.deltaMode===2) delta*=400;
+            delta = Math.max(-60,Math.min(60,delta));
+            const factor = Math.exp(-delta*0.006);
+            const rect = viewport.getBoundingClientRect();
+            const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+            panX = mx-(mx-panX)*factor;
+            panY = my-(my-panY)*factor;
+            scale = Math.max(MIN_SCALE,Math.min(MAX_SCALE,scale*factor));
+            applyPanZoom();
+        },{ passive:false });
+
+        // ── Pointer events ────────────────────────────────────────────────────
+        let isDragging=false, dragMoved=false;
+        let dragStartX=0, dragStartY=0, panOriginX=0, panOriginY=0;
+
+        viewport.addEventListener('mousedown',(e)=>{
+            if (e.button!==0 || modalIsOpen) return;
+            e.preventDefault();
+            if (currentMode==='polygon') {
+                isDrawingFreehand=true; freehandPoints=[getCoords(e)];
+                viewport.style.cursor='crosshair'; return;
+            }
+            isDragging=true; dragMoved=false;
+            dragStartX=e.clientX; dragStartY=e.clientY;
+            panOriginX=panX; panOriginY=panY;
+            viewport.style.cursor='grabbing';
+        });
+
+        window.addEventListener('mousemove',(e)=>{
+            const [nx,ny]=getCoords(e);
+            coordX.innerText=Math.round(nx); coordY.innerText=Math.round(ny);
+            if (isDrawingFreehand) {
+                const last=freehandPoints[freehandPoints.length-1];
+                if (Math.hypot(nx-last[0],ny-last[1])>=SAMPLE_DIST) freehandPoints.push([nx,ny]);
+                if (freehandPoints.length>1) {
+                    activeLine.setAttribute('points',[...freehandPoints,freehandPoints[0]].map(p=>p.join(',')).join(' '));
+                    activeLine.style.stroke=PREVIEW_COLOUR[currentLabel]||'gold';
+                }
+                return;
+            }
+            if (isDragging) {
+                const dx=e.clientX-dragStartX, dy=e.clientY-dragStartY;
+                if (Math.abs(dx)>4||Math.abs(dy)>4) dragMoved=true;
+                if (dragMoved) { panX=panOriginX+dx; panY=panOriginY+dy; applyPanZoom(); }
+            }
+            if (!dragMoved && currentMode==='path' && activePoints.length>0) {
+                activeLine.setAttribute('points',activePoints.map(p=>p.join(',')).join(' ')+` ${nx},${ny}`);
+            }
+        });
+
+        window.addEventListener('mouseup',()=>{
+            if (isDrawingFreehand) {
+                isDrawingFreehand=false; activeLine.setAttribute('points','');
+                if (freehandPoints.length>=4) {
+                    const name=prompt(`Name this ${currentLabel} region (leave blank for unnamed):`);
+                    if (name!==null) {
+                        const trimmed=name.trim();
+                        const feature={ name:trimmed, coords:freehandPoints.map(([x,y])=>({x,y})), type:currentLabel };
+                        if (!trimmed) feature.unnamed=true;
+                        mapLedger.polygons.push(feature); history.push('polygons');
+                        renderPermanent(); autoSave();
+                    }
+                } else { setStatus('Region too small — try dragging a larger area.',2500); }
+                freehandPoints=[]; setStatus(); return;
+            }
+            isDragging=false;
+            viewport.style.cursor=removeMode?'default':(currentMode?'crosshair':'grab');
+        });
+
+        viewport.addEventListener('click',(e)=>{
+            if (removeMode||modalIsOpen) return;
+            if (dragMoved||!currentMode||currentMode==='polygon') return;
+            const coords=getCoords(e);
+            if (currentMode==='point') {
+                const name=prompt(`Name this ${currentLabel}:`);
+                if (name&&name.trim()) {
+                    mapLedger.points.push({ name:name.trim(), x:coords[0], y:coords[1], type:currentLabel });
+                    history.push('points'); renderPermanent(); autoSave();
+                } else if (name!==null) {
+                    setStatus('A name is required — no feature added.',2500);
+                }
+                setStatus(); return;
+            }
+            if (currentMode==='path') { activePoints.push(coords); updateActiveLine(); setStatus(); }
+        });
+
+        viewport.addEventListener('contextmenu',(e)=>{
+            e.preventDefault();
+            if (currentMode==='path' && activePoints.length>=2) {
+                const name=prompt(`Name this ${currentLabel} (leave blank for unnamed):`);
+                if (name!==null) {
+                    const trimmed=name.trim();
+                    const feature={ name:trimmed, coords:activePoints.map(([x,y])=>({x,y})), type:currentLabel };
+                    if (!trimmed) feature.unnamed=true;
+                    mapLedger.paths.push(feature); history.push('paths');
+                    activePoints=[]; updateActiveLine(); renderPermanent(); autoSave(); setStatus();
+                }
+            }
+        });
+
+        mapSvg.addEventListener('click',(e)=>{
+            if (!removeMode) return;
+            e.stopPropagation();
+            const target=e.target.closest('[data-arr]');
+            if (!target) return;
+            const arr=target.dataset.arr, idx=parseInt(target.dataset.idx);
+            const item=mapLedger[arr][idx]; if (!item) return;
+            const label=item.name?`"${item.name}"`:'(unnamed)';
+            const typeName=arr==='polygons'?item.type+' region':item.type;
+            if (confirm(`Remove ${typeName} ${label}?`)) {
+                mapLedger[arr].splice(idx,1); renderPermanent(); autoSave();
+                setStatus('Feature removed.',2000);
+            }
+        });
+
+        function updateActiveLine() {
+            activeLine.setAttribute('points',activePoints.map(p=>p.join(',')).join(' '));
+            activeLine.style.stroke=PREVIEW_COLOUR[currentLabel]||'gold';
+        }
+
+        // ── Undo ──────────────────────────────────────────────────────────────
+        document.getElementById('undo-btn').onclick=()=>{
+            if (isDrawingFreehand) {
+                isDrawingFreehand=false; freehandPoints=[]; activeLine.setAttribute('points','');
+                setStatus('Drawing cancelled.',2000); return;
+            }
+            if (activePoints.length>0) {
+                activePoints=[]; updateActiveLine(); setStatus('Route cancelled.',2000); return;
+            }
+            if (history.length===0) { setStatus('Nothing to undo.',2000); return; }
+            const arr=history.pop(); mapLedger[arr].pop();
+            renderPermanent(); autoSave(); setStatus('Last feature removed.',2000);
+        };
+
+        // ── Overlay toggle ────────────────────────────────────────────────────
+        toggleOverlayBtn.onclick=()=>{
+            overlayVisible=!overlayVisible;
+            ['polygon-layer','path-layer','point-layer'].forEach(id=>{
+                document.getElementById(id).style.display=overlayVisible?'':'none';
+            });
+            toggleOverlayBtn.textContent=overlayVisible?'overlay ●':'overlay ○';
+            toggleOverlayBtn.classList.toggle('active',overlayVisible);
+        };
+
+        // ── Remove mode ───────────────────────────────────────────────────────
+        removeBtn.onclick=()=>{
+            if (isDrawingFreehand) {
+                isDrawingFreehand=false; freehandPoints=[]; activeLine.setAttribute('points','');
+            }
+            activePoints=[]; updateActiveLine();
+            removeMode=!removeMode;
+            if (removeMode) {
+                document.querySelectorAll('.tool').forEach(b=>b.classList.remove('active'));
+                currentMode=null; currentLabel=null; modeDisplay.innerText='remove';
+                mapSvg.classList.add('remove-mode'); viewport.style.cursor='default';
+                removeBtn.classList.add('active');
+            } else {
+                mapSvg.classList.remove('remove-mode'); viewport.style.cursor='grab';
+                removeBtn.classList.remove('active'); modeDisplay.innerText='none';
+            }
+            setStatus();
+        };
+
+        // ── Drawing tool buttons ──────────────────────────────────────────────
+        document.querySelectorAll('.tool').forEach(btn=>{
+            btn.onclick=()=>{
+                if (removeMode) {
+                    removeMode=false; mapSvg.classList.remove('remove-mode'); removeBtn.classList.remove('active');
+                }
+                if (isDrawingFreehand) {
+                    isDrawingFreehand=false; freehandPoints=[]; activeLine.setAttribute('points','');
+                }
+                activePoints=[];
+                document.querySelectorAll('.tool').forEach(b=>b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode=btn.dataset.type; currentLabel=btn.dataset.label;
+                modeDisplay.innerText=`${currentMode}(${currentLabel})`;
+                updateActiveLine(); viewport.style.cursor='crosshair'; setStatus();
+            };
+        });
+
+        document.getElementById('fit-btn').onclick=fitMap;
+        document.getElementById('save-btn').onclick=async()=>{ setStatus('Saving…'); await autoSave(); };
+        document.getElementById('edit-map-info-btn').onclick=editMapInfo;
+        addAltBtn.onclick=addAlternate;
+        setPreferredBtn.onclick=setPreferred;
+        document.getElementById('import-overlay-btn').onclick=importOverlay;
+        versionSelect.onchange=()=>switchVersion(versionSelect.value);
+
+        window.addEventListener('beforeunload',(e)=>{
+            if (isDrawingFreehand||activePoints.length>0){ e.preventDefault(); e.returnValue=''; }
+        });
+
+        // ── Init ──────────────────────────────────────────────────────────────
+        async function init() {
+            layoutViewport();
+            if (!userid||!author||!series||!bookid) {
+                setStatus('Missing book reference — please open from your book page.'); return;
+            }
+            setStatus('Loading book…');
+            try {
+                const bookRef=doc(db,'users',userid,'authors',author,'series',series,'books',bookid);
+                const snap=await getDoc(bookRef);
+                if (!snap.exists()) { setStatus('Book not found in vault.'); return; }
+                bookMaps=Array.isArray(snap.data().maps)?snap.data().maps:[];
+                if (bookMaps.length===0) {
+                    setStatus('No maps found for this book.');
+                    mapSelect.innerHTML='<option value="">no maps</option>'; return;
+                }
+                let needsUpdate=false;
+                bookMaps.forEach(m=>{
+                    if (!m.source)     { m.source='epub';     needsUpdate=true; }
+                    if (!m.alternates) { m.alternates=[];      needsUpdate=true; }
+                    if (!m.preferred)  { m.preferred='original'; needsUpdate=true; }
+                });
+                if (needsUpdate) await updateDoc(bookRef,{ maps:bookMaps });
+                mapSelect.innerHTML=bookMaps.map((m,i)=>
+                    `<option value="${i}">${m.name||'Map '+(i+1)}</option>`).join('');
+                await loadMapByIndex(0);
+                mapSelect.onchange=()=>loadMapByIndex(parseInt(mapSelect.value));
+            } catch(err) { console.error(err); setStatus('Error: '+err.message); }
+        }
+
+        window.addEventListener('resize',layoutViewport);
+        window.onload=init;
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.5 | high fantasy companion - library</title>
+    <title>v1.7 | high fantasy companion - library</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -108,18 +108,18 @@
                         const seriesSection = document.createElement('div');
                         seriesSection.className = 'series-container';
 
-                        const displaySeriesName = seriesTitle.replace(/-/g, ' ');
-                        const displayAuthorName = authorName.replace(/-/g, ' ');
+                        const displaySeriesName = seriesDoc.data().name || seriesTitle.replace(/-/g, ' ');
+                        const displayAuthorName = authorDoc.data().name || authorName.replace(/-/g, ' ');
 
                         seriesSection.innerHTML = `
                             <h3 class="series-title">${displaySeriesName} <span style="font-size: 0.6em; font-weight: normal; font-style: italic;">by ${displayAuthorName}</span></h3>
-                            <div class="book-grid" id="grid-${seriesTitle}"></div>
+                            <div class="book-grid" id="grid-${authorName}-${seriesTitle}"></div>
                         `;
                         content.appendChild(seriesSection);
 
                         // Fetch all books in this series
                         const booksSnap = await getDocs(collection(db, "users", userid, "authors", authorName, "series", seriesTitle, "books"));
-                        const grid = document.getElementById(`grid-${seriesTitle}`);
+                        const grid = document.getElementById(`grid-${authorName}-${seriesTitle}`);
 
                         grid.innerHTML = booksSnap.docs.map(bookDoc => {
                             const book = bookDoc.data();
