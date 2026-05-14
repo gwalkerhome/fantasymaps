@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.1 | chaptest — chapter character check</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+        /* ── Top bar ────────────────────────────────────────────────────── */
+        .top-bar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+            background: var(--aged-parchment);
+            border-bottom: 2px solid var(--earth-brown);
+            padding: 7px 12px;
+            display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+        }
+        .tool-group {
+            display: flex; align-items: center; gap: 5px;
+            border-right: 1px solid var(--earth-brown); padding-right: 10px;
+        }
+        .tool-group:last-child { border-right: none; }
+        .tool-group label { font-size: 0.78em; white-space: nowrap; }
+        .btn { padding: 4px 9px; font-size: 0.82em; }
+        select.btn { font-family: inherit; cursor: pointer; }
+        #status-text {
+            font-size: 0.78em; font-style: italic;
+            color: var(--earth-brown); flex: 1;
+        }
+
+        /* ── Chapter strip ──────────────────────────────────────────────── */
+        #chapter-strip {
+            position: fixed; left: 0; right: 0; z-index: 190;
+            background: var(--aged-parchment);
+            border-bottom: 1px solid rgba(106,79,75,0.3);
+            padding: 5px 12px;
+            display: flex; align-items: center; gap: 5px;
+            overflow-x: auto;
+        }
+        #chapter-strip::-webkit-scrollbar { height: 4px; }
+        #chapter-strip::-webkit-scrollbar-thumb { background: rgba(106,79,75,0.35); border-radius: 2px; }
+        .ch-btn {
+            padding: 4px 10px; font-size: 0.76em; white-space: nowrap;
+            flex-shrink: 0; cursor: pointer; font-family: 'Cinzel', serif;
+        }
+        .ch-btn.active {
+            background-color: var(--moss-green);
+            outline: 2px solid var(--iron-ink);
+        }
+
+        /* ── Main scrollable content ────────────────────────────────────── */
+        #main-content {
+            position: fixed; left: 0; right: 0; bottom: 0;
+            overflow-y: auto;
+            padding: 16px 20px 30px;
+            background: var(--aged-parchment);
+        }
+
+        /* ── Chapter heading ────────────────────────────────────────────── */
+        #chapter-heading {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1em; font-weight: 700;
+            color: var(--earth-brown);
+            margin-bottom: 4px;
+        }
+        #chapter-meta {
+            font-family: 'Spectral', serif;
+            font-style: italic; font-size: 0.82em;
+            color: var(--earth-brown); opacity: 0.75;
+            margin-bottom: 14px;
+        }
+
+        /* ── Character table ────────────────────────────────────────────── */
+        #char-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Spectral', serif;
+            font-size: 0.85em;
+        }
+        #char-table thead tr {
+            background: rgba(106,79,75,0.12);
+        }
+        #char-table th {
+            font-family: 'Cinzel', serif;
+            font-size: 0.68em; font-weight: 700;
+            color: var(--earth-brown);
+            text-transform: uppercase; letter-spacing: 0.07em;
+            padding: 8px 10px; text-align: left;
+            border-bottom: 2px solid var(--earth-brown);
+            white-space: nowrap;
+        }
+        #char-table td {
+            padding: 7px 10px;
+            border-bottom: 1px solid rgba(106,79,75,0.15);
+            vertical-align: top;
+            line-height: 1.4;
+        }
+        #char-table tbody tr:hover {
+            background: rgba(106,79,75,0.05);
+        }
+        #char-table tbody tr.ref-only {
+            opacity: 0.45;
+        }
+
+        /* ── Name cell ──────────────────────────────────────────────────── */
+        .name-cell {
+            display: flex; align-items: flex-start; gap: 7px;
+        }
+        .char-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            flex-shrink: 0; margin-top: 4px;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .char-name { font-weight: 700; }
+
+        /* ── Alias cells ────────────────────────────────────────────────── */
+        .alias-in-chapter {
+            font-style: italic; color: var(--earth-brown);
+        }
+        .alias-known {
+            color: #555;
+        }
+        .alias-match {
+            /* alias that appears in BOTH the register and this chapter's usage */
+            font-weight: bold; color: var(--earth-brown);
+        }
+
+        /* ── Location cell — coloured by status ─────────────────────────── */
+        .loc-cell {
+            font-style: italic;
+        }
+        .loc-placed       { background: rgba(42,122,42,0.12);  }
+        .loc-vague        { background: rgba(200,130,10,0.12); }
+        .loc-group_implied{ background: rgba(34,102,204,0.10); }
+        .loc-no_location  { background: rgba(120,120,120,0.08); font-style: normal; color: #999; }
+        .loc-off_map      { background: rgba(160,30,30,0.08);  }
+        .loc-wrong_map    { background: rgba(180,90,10,0.08);  }
+        .loc-referenced_only { background: transparent; color: #aaa; font-style: normal; }
+        .loc-new_character{ background: rgba(130,50,170,0.08); }
+        .loc-ambiguous    { background: rgba(200,130,10,0.08); }
+
+        /* ── Status badge ────────────────────────────────────────────────── */
+        .status-badge {
+            font-size: 0.65em; padding: 2px 6px; border-radius: 3px;
+            font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        .s-placed          { background: #d4edda; color: #155724; }
+        .s-vague           { background: #fff3cd; color: #856404; }
+        .s-group_implied   { background: #cce5ff; color: #004085; }
+        .s-no_location     { background: #e2e3e5; color: #383d41; }
+        .s-off_map         { background: #f8d7da; color: #721c24; }
+        .s-wrong_map       { background: #fde8d8; color: #7a3a00; }
+        .s-referenced_only { background: #e2e3e5; color: #383d41; }
+        .s-new_character   { background: #e8d5f5; color: #4a1270; }
+        .s-ambiguous       { background: #fff3cd; color: #856404; }
+
+        /* ── Confidence dot ──────────────────────────────────────────────── */
+        .conf-dot { font-size: 1em; }
+        .conf-high   { color: #2a7a2a; }
+        .conf-medium { color: #a07020; }
+        .conf-low    { color: #a02020; }
+
+        /* ── Notes ───────────────────────────────────────────────────────── */
+        .notes-text {
+            font-size: 0.78em; font-style: italic;
+            color: #777; margin-top: 3px;
+        }
+
+        /* ── Empty / loading states ─────────────────────────────────────── */
+        .empty-state {
+            text-align: center; padding: 40px 20px;
+            font-family: 'Spectral', serif; font-style: italic;
+            color: var(--earth-brown); opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Top bar ──────────────────────────────────────────────────────── -->
+    <div class="top-bar" id="top-bar">
+        <div class="tool-group">
+            <a href="postest.html" class="btn secondary">← postest</a>
+        </div>
+        <div class="tool-group">
+            <label>Book:</label>
+            <select id="book-select" class="btn secondary">
+                <option value="">loading…</option>
+            </select>
+        </div>
+        <span id="status-text">Select a book to begin.</span>
+    </div>
+
+    <!-- ── Chapter strip ────────────────────────────────────────────────── -->
+    <div id="chapter-strip">
+        <span style="font-size:0.78em;font-style:italic;opacity:0.6;flex-shrink:0;">
+            Load a book to see chapters
+        </span>
+    </div>
+
+    <!-- ── Main content ─────────────────────────────────────────────────── -->
+    <div id="main-content">
+        <div class="empty-state">Select a book then choose a chapter above.</div>
+    </div>
+
+    <script type="module">
+        import { db } from './firebase.js';
+        import {
+            doc, getDoc, collection, getDocs
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // ── Constants ──────────────────────────────────────────────────────
+        const USERID = 'default-user';
+        const CHAR_COLOURS = [
+            '#ff7800', '#2266cc', '#22aa44', '#cc2222',
+            '#aa44cc', '#cc8800', '#006688', '#884400'
+        ];
+
+        // ── State ──────────────────────────────────────────────────────────
+        let allBooks          = [];
+        let currentBook       = null;
+        let characterRegister = [];   // [{name, aliases, colour}]
+        let allChapters       = [];   // [{num, title, characters}]
+        let activeChapterNum  = null;
+
+        // ── DOM refs ───────────────────────────────────────────────────────
+        const topBar       = document.getElementById('top-bar');
+        const bookSelect   = document.getElementById('book-select');
+        const chapterStrip = document.getElementById('chapter-strip');
+        const mainContent  = document.getElementById('main-content');
+        const statusText   = document.getElementById('status-text');
+
+        // ── Layout ─────────────────────────────────────────────────────────
+        function layoutViewport() {
+            const tbH = topBar.offsetHeight;
+            const csH = chapterStrip.offsetHeight;
+            chapterStrip.style.top  = tbH + 'px';
+            mainContent.style.top   = (tbH + csH) + 'px';
+        }
+        window.addEventListener('resize', layoutViewport);
+
+        // ── Status ─────────────────────────────────────────────────────────
+        function setStatus(msg) { statusText.textContent = msg; }
+
+        // ── Colour for a character name ────────────────────────────────────
+        function colourFor(name) {
+            const reg = characterRegister.find(
+                r => r.name.toLowerCase() === name.toLowerCase()
+            );
+            if (reg && reg.colour) return reg.colour;
+            let h = 0;
+            for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+            return CHAR_COLOURS[h % CHAR_COLOURS.length];
+        }
+
+        // ── Full alias list from register ──────────────────────────────────
+        function aliasesFor(name) {
+            const reg = characterRegister.find(
+                r => r.name.toLowerCase() === name.toLowerCase()
+            );
+            return reg ? (reg.aliases || []) : [];
+        }
+
+        // ── Load all books ─────────────────────────────────────────────────
+        async function loadAllBooks() {
+            setStatus('Consulting the vault…');
+            bookSelect.innerHTML = '<option value="">loading…</option>';
+
+            try {
+                const authorsSnap = await getDocs(
+                    collection(db, 'users', USERID, 'authors')
+                );
+                const books = [];
+                for (const aDoc of authorsSnap.docs) {
+                    const serSnap = await getDocs(
+                        collection(db, 'users', USERID, 'authors', aDoc.id, 'series')
+                    );
+                    for (const sDoc of serSnap.docs) {
+                        const bSnap = await getDocs(
+                            collection(db, 'users', USERID,
+                                'authors', aDoc.id, 'series', sDoc.id, 'books')
+                        );
+                        for (const bDoc of bSnap.docs) {
+                            const data = bDoc.data();
+                            books.push({
+                                userid: USERID,
+                                author: aDoc.id,
+                                series: sDoc.id,
+                                bookid: bDoc.id,
+                                title:  data.title || bDoc.id,
+                                maps:   data.maps  || [],
+                                characterRegister: data.characterRegister || []
+                            });
+                        }
+                    }
+                }
+
+                allBooks = books;
+                if (!books.length) {
+                    bookSelect.innerHTML = '<option value="">no books found</option>';
+                    setStatus('No books in vault. Run the Scribe first.');
+                    return;
+                }
+                bookSelect.innerHTML =
+                    '<option value="">— select a book —</option>' +
+                    books.map((b, i) =>
+                        `<option value="${i}">${b.title}</option>`
+                    ).join('');
+                setStatus('Ready. Select a book.');
+
+            } catch (err) {
+                console.error(err);
+                setStatus('Error: ' + err.message);
+            }
+        }
+
+        // ── Book selected ──────────────────────────────────────────────────
+        bookSelect.onchange = async () => {
+            const idx = bookSelect.value;
+            if (idx === '') return;
+            currentBook = allBooks[parseInt(idx)];
+            characterRegister = currentBook.characterRegister || [];
+            allChapters = [];
+            activeChapterNum = null;
+            mainContent.innerHTML =
+                '<div class="empty-state">Loading chapters…</div>';
+            await loadChapters();
+        };
+
+        // ── Load chapters from Firestore ───────────────────────────────────
+        async function loadChapters() {
+            setStatus('Loading chapters from vault…');
+            try {
+                const snap = await getDocs(
+                    collection(db,
+                        'users', currentBook.userid,
+                        'authors', currentBook.author,
+                        'series', currentBook.series,
+                        'books', currentBook.bookid,
+                        'chapters')
+                );
+                allChapters = snap.docs
+                    .map(d => d.data())
+                    .sort((a, b) => (a.num || 0) - (b.num || 0));
+
+                buildChapterStrip();
+                layoutViewport();
+
+                if (allChapters.length) {
+                    setStatus(`${allChapters.length} chapter(s) loaded. Select one above.`);
+                    mainContent.innerHTML =
+                        '<div class="empty-state">Choose a chapter from the strip above.</div>';
+                } else {
+                    setStatus('No chapter data found. Run the Scribe first.');
+                    chapterStrip.innerHTML =
+                        '<span style="font-size:0.78em;font-style:italic;color:#a02020;">No chapter data</span>';
+                }
+            } catch (err) {
+                console.error(err);
+                setStatus('Error loading chapters: ' + err.message);
+            }
+        }
+
+        // ── Build chapter button strip ─────────────────────────────────────
+        function buildChapterStrip() {
+            if (!allChapters.length) {
+                chapterStrip.innerHTML =
+                    '<span style="font-size:0.78em;font-style:italic;opacity:0.6;">No chapters</span>';
+                return;
+            }
+            chapterStrip.innerHTML = allChapters.map(ch => {
+                const label = ch.num === 0 ? 'Prologue' : `Ch ${ch.num}`;
+                return `<button class="ch-btn btn secondary"
+                                data-num="${ch.num}"
+                                title="${ch.title}">${label}</button>`;
+            }).join('');
+
+            chapterStrip.querySelectorAll('.ch-btn').forEach(btn => {
+                btn.onclick = () => showChapter(parseInt(btn.dataset.num));
+            });
+        }
+
+        // ── Show chapter ───────────────────────────────────────────────────
+        function showChapter(chNum) {
+            activeChapterNum = chNum;
+
+            document.querySelectorAll('.ch-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.num) === chNum);
+            });
+
+            const chapter = allChapters.find(c => c.num === chNum);
+            if (!chapter) return;
+
+            setStatus(`Chapter ${chNum}: ${chapter.title} — ${(chapter.characters||[]).length} character record(s)`);
+            renderChapterTable(chapter);
+        }
+
+        // ── Render the character table ─────────────────────────────────────
+        function renderChapterTable(chapter) {
+            const chars = chapter.characters || [];
+
+            if (!chars.length) {
+                mainContent.innerHTML = `
+                    <div id="chapter-heading">Chapter ${chapter.num}: ${chapter.title}</div>
+                    <div id="chapter-meta">No character data saved for this chapter.</div>`;
+                return;
+            }
+
+            // Sort: placed/vague/group_implied first, then others, referenced_only last
+            const ORDER = ['placed','group_implied','vague','new_character',
+                           'ambiguous','no_location','off_map','wrong_map','referenced_only'];
+            const sorted = [...chars].sort((a, b) => {
+                const ai = ORDER.indexOf(a.status);
+                const bi = ORDER.indexOf(b.status);
+                return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+            });
+
+            const placeable = chars.filter(c =>
+                ['placed','group_implied','vague'].includes(c.status)).length;
+            const refOnly   = chars.filter(c => c.status === 'referenced_only').length;
+
+            const rows = sorted.map((c, i) => {
+                const colour    = colourFor(c.name);
+                const known     = aliasesFor(c.name);
+                const usedInCh  = c.aliases_used || [];
+                const status    = c.status || 'unknown';
+                const conf      = c.confidence || 'low';
+                const locClass  = `loc-${status}`;
+                const isRefOnly = status === 'referenced_only';
+
+                // Aliases used in this chapter
+                const usedHtml = usedInCh.length
+                    ? usedInCh.map(a => `<span class="alias-in-chapter">${a}</span>`).join(', ')
+                    : '<span style="opacity:0.45;">—</span>';
+
+                // All known aliases from register, bolding those that appear in chapter usage
+                const knownHtml = known.length
+                    ? known.map(a => {
+                        const inChapter = usedInCh.some(
+                            u => u.toLowerCase() === a.toLowerCase()
+                        );
+                        return inChapter
+                            ? `<span class="alias-match">${a}</span>`
+                            : `<span class="alias-known">${a}</span>`;
+                      }).join(', ')
+                    : '<span style="opacity:0.45;">not in register</span>';
+
+                // Location cell
+                const locText = c.location_description || '—';
+                const notesHtml = c.notes
+                    ? `<div class="notes-text">ℹ ${c.notes}</div>`
+                    : '';
+
+                const confCls = `conf-${conf}`;
+
+                return `
+                <tr class="${isRefOnly ? 'ref-only' : ''}">
+                    <td style="color:#aaa;font-size:0.8em;white-space:nowrap;">${i + 1}</td>
+                    <td>
+                        <div class="name-cell">
+                            <span class="char-dot" style="background:${colour}"></span>
+                            <span class="char-name">${c.name}</span>
+                        </div>
+                    </td>
+                    <td>${usedHtml}</td>
+                    <td>${knownHtml}</td>
+                    <td style="color:#aaa;font-style:italic;font-size:0.82em;">—</td>
+                    <td class="loc-cell ${locClass}">
+                        ${locText}
+                        ${notesHtml}
+                    </td>
+                    <td><span class="status-badge s-${status}">${status.replace(/_/g,' ')}</span></td>
+                    <td><span class="conf-dot ${confCls}" title="${conf}">●</span></td>
+                </tr>`;
+            }).join('');
+
+            mainContent.innerHTML = `
+                <div id="chapter-heading">Chapter ${chapter.num}: ${chapter.title}</div>
+                <div id="chapter-meta">
+                    ${chars.length} character record(s) &nbsp;·&nbsp;
+                    ${placeable} placeable &nbsp;·&nbsp;
+                    ${refOnly} referenced only
+                    &nbsp;<span style="font-size:0.85em;opacity:0.7;">(faded rows = referenced only)</span>
+                </div>
+                <table id="char-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Character</th>
+                            <th>Called in this chapter</th>
+                            <th>All known aliases</th>
+                            <th>Group</th>
+                            <th>Location at end of chapter</th>
+                            <th>Status</th>
+                            <th>Conf</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        }
+
+        // ── Init ───────────────────────────────────────────────────────────
+        window.onload = async () => {
+            layoutViewport();
+            await loadAllBooks();
+
+            // Auto-select book if bookid passed in URL (e.g. from postest link)
+            const urlBookId = new URLSearchParams(window.location.search).get('b');
+            if (urlBookId && allBooks.length) {
+                const matchIdx = allBooks.findIndex(b => b.bookid === urlBookId);
+                if (matchIdx !== -1) {
+                    bookSelect.value = matchIdx;
+                    bookSelect.dispatchEvent(new Event('change'));
+                }
+            }
+        };
+
+    </script>
+</body>
+</html>

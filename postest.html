@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.8 | postest — character position</title>
+    <title>v2.1 | postest — character position</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -364,6 +364,9 @@
         <div class="tool-group">
             <button id="fit-btn" class="btn secondary" title="fit map to screen">⊡</button>
         </div>
+        <div class="tool-group">
+            <a id="chaptest-link" href="chaptest.html" class="btn secondary" title="open chapter data inspector">chapter data ↗</a>
+        </div>
     </div>
 
     <!-- ── Status bar ───────────────────────────────────────────────────── -->
@@ -386,6 +389,13 @@
                 </svg>
 
                 <svg id="character-svg" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                        <marker id="arrow-head" markerWidth="4" markerHeight="4"
+                                refX="2" refY="2" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L4,2 L0,4 Z" fill="white" opacity="0.9"/>
+                        </marker>
+                    </defs>
+                    <g id="halo-layer"></g>
                     <g id="character-layer"></g>
                 </svg>
             </div>
@@ -413,6 +423,19 @@
         <span id="chapter-strip-label">Chapters</span>
         <div id="chapter-btns" style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
             <span style="font-size:0.8em; font-style:italic; opacity:0.6;">Load a book to see chapters</span>
+        </div>
+    </div>
+
+    <!-- ── Group popup ─────────────────────────────────────────────────── -->
+    <div id="group-popup" style="
+        display:none; position:fixed; z-index:600;
+        background:var(--aged-parchment); border:2px solid var(--earth-brown);
+        border-radius:5px; padding:10px 14px; min-width:140px; max-width:210px;
+        box-shadow:0 4px 15px rgba(0,0,0,0.45); pointer-events:auto;">
+        <div id="group-popup-title" style="font-family:'Cinzel',serif; font-size:0.78em; font-weight:700; color:var(--earth-brown); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;"></div>
+        <ul id="group-popup-list" style="margin:0; padding:0 0 0 4px; list-style:none; font-size:0.8em; line-height:1.8;"></ul>
+        <div style="text-align:right; margin-top:6px;">
+            <button id="group-popup-close" class="btn secondary" style="font-size:0.72em; padding:2px 7px;">close</button>
         </div>
     </div>
 
@@ -487,13 +510,38 @@
             </details>
         </div>
 
+        <!-- Maps backup / restore -->
+        <div class="sidebar-section">
+            <details class="collapsible">
+                <summary>Maps Backup</summary>
+                <p style="font-size:0.76em;line-height:1.4;margin-bottom:8px;">
+                    Backup your alternate map references to local storage before re-running the Scribe.
+                    Restore afterwards to reconnect them.
+                </p>
+                <button id="backup-maps-btn" class="btn secondary"
+                        style="width:100%;margin-bottom:5px;font-size:0.76em;">
+                    Backup Maps Data
+                </button>
+                <button id="restore-maps-btn" class="btn secondary"
+                        style="width:100%;font-size:0.76em;">
+                    Restore Maps Data
+                </button>
+                <div id="backup-status"
+                     style="font-size:0.75em;font-style:italic;color:var(--earth-brown);margin-top:7px;line-height:1.4;">
+                </div>
+            </details>
+        </div>
+
     </div><!-- /sidebar -->
 
     <script type="module">
-        import { db } from './firebase.js';
+        import { db, storage } from './firebase.js';
         import {
-            doc, getDoc, collection, getDocs
+            doc, getDoc, collection, getDocs, updateDoc
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import {
+            ref, getDownloadURL
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         // ── Constants ──────────────────────────────────────────────────────
         const USERID = 'default-user';
@@ -798,21 +846,25 @@ ${mapNames}
 
 INSTRUCTIONS:
 1. Only include characters who are physically present in the scene. Do NOT include characters mentioned in dialogue, memory, or flashback.
-2. For group travel ("they rode north"), give each named group member their own entry with status "group_implied" and the same location.
-3. Always report the character's location at the END of the passage. If they move during it, report their final position.
-4. Resolve aliases ("the boy", "the ranger", "she", etc.) to canonical names from the register where possible.
-5. Assign one of these statuses:
+2. Always report the character's location at the END of the passage. If they move during it, report their final position.
+3. Resolve aliases ("the boy", "the ranger", "she", etc.) to canonical names from the register where possible.
+4. Assign one of these statuses:
    - "placed"           — a specific named location can be identified
-   - "vague"            — only a directional or general geographic clue exists (e.g. "somewhere to the east")
+   - "travelling"       — character is explicitly in transit between two named places; populate journey_from and journey_to
+   - "vague"            — only a directional or general geographic clue exists (e.g. "somewhere to the east") with no clear origin or destination
    - "no_location"      — character is present but no location can be determined
    - "off_map"          — character is at a location not on any available map
    - "wrong_map"        — character is on a different map from the one currently active
    - "referenced_only"  — mentioned in speech/memory but not physically present
-   - "group_implied"    — location inferred from a group
    - "new_character"    — not in the register; flag for review
    - "ambiguous"        — location genuinely cannot be reliably determined
-6. Assign confidence: "high", "medium", or "low".
-7. CRITICAL — location_description must name the SETTLEMENT, FORTRESS, REGION, or NAMED GEOGRAPHIC FEATURE where the character is located. Do NOT describe their position within a building (e.g. "a chamber", "the doorway", "the top of a tower"). The map cannot show room-level detail. If a character is inside a building, name the settlement or place that building belongs to. Example: write "Murias" not "in a chamber within Murias".
+5. Assign confidence: "high", "medium", or "low".
+6. CRITICAL — location_description must name the SETTLEMENT, FORTRESS, REGION, or NAMED GEOGRAPHIC FEATURE where the character is located. Do NOT describe their position within a building (e.g. "a chamber", "the doorway", "the top of a tower"). The map cannot show room-level detail. If a character is inside a building, name the settlement or place that building belongs to. Example: write "Murias" not "in a chamber within Murias".
+7. GROUP NAMES — Only assign a group_name when characters are explicitly operating together as a cohesive unit (a company, fellowship, army, war band, scouting party, etc.). The text will usually make this clear with collective nouns ("the company", "the fellowship", "the army of..."). Two characters who merely share a scene or happen to be in the same place are NOT a group. Use the text's own name for the group where one exists. If the group has no name in the text, invent a brief descriptive one (e.g. "Thorin's Dwarves"). Set group_name to null for solo characters.
+8. JOURNEY FIELDS — When status is "travelling", populate:
+   - journey_from: the last named place the character/group departed from in this or a recent passage
+   - journey_to: the next named destination mentioned or clearly implied in the text
+   If status is NOT "travelling", set both fields to null.
 
 Return ONLY valid JSON — no other text, no markdown fences:
 {
@@ -820,8 +872,11 @@ Return ONLY valid JSON — no other text, no markdown fences:
     {
       "name": "<canonical name, or best name from text>",
       "aliases_used": ["<alias seen in text>"],
+      "group_name": "<operating group name, or null if solo or merely sharing a scene>",
       "location_description": "<the settlement, fortress, region or named geographic feature — NOT a room or interior detail>",
       "status": "<see above>",
+      "journey_from": "<last named departure point, or null>",
+      "journey_to": "<next named destination, or null>",
       "confidence": "<high|medium|low>",
       "map_hint": "<name of relevant map if determinable, else null>",
       "notes": "<any caveats, ambiguities, or movement notes — empty string if none>"
@@ -855,6 +910,34 @@ The character "${charName}" is described as being at: "${locationDesc}"
 
 Return ONLY valid JSON — no other text:
 {"x": <number 0-100>, "y": <number 0-100>, "matched": "<feature matched>", "confidence": "<high|medium|low>"}`;
+        }
+
+        // ── Build Pass 2 system prompt for a journey (travelling status) ──────
+        function buildPass2JourneyPrompt(entityName, journeyFrom, journeyTo) {
+            return `You are a cartographic positioning assistant for a fantasy map reader application.
+
+COORDINATE SYSTEM:
+- (0,0) is TOP-LEFT of the map image; (100,100) is BOTTOM-RIGHT
+- North = towards y=0 | South = towards y=100
+- East  = towards x=100 | West = towards x=0
+- direction_deg: 0=north, 90=east, 180=south, 270=west
+
+MAP FEATURES:
+${buildOverlayDescription()}
+
+TASK:
+"${entityName}" is currently travelling FROM "${journeyFrom}" TO "${journeyTo}".
+
+1. Locate "${journeyFrom}" in the map features above — note its approximate coordinates as from_x, from_y.
+2. Locate "${journeyTo}" in the map features above — note its approximate coordinates as to_x, to_y.
+3. Calculate the midpoint between these two — this is where to place the character (x, y).
+4. Calculate the compass bearing from origin to destination: 0=north, 90=east, 180=south, 270=west.
+5. Choose a halo_radius (5 to 15 map units) to reflect position uncertainty — use larger values for long or vague journeys, smaller for well-defined short routes.
+
+If either endpoint cannot be matched to a map feature, estimate its position from geographic context.
+
+Return ONLY valid JSON — no other text:
+{"x": <midpoint x 0-100>, "y": <midpoint y 0-100>, "from_x": <origin x>, "from_y": <origin y>, "to_x": <dest x>, "to_y": <dest y>, "direction_deg": <0-359>, "halo_radius": <5-15>, "matched": "<what was matched>", "confidence": "<high|medium|low>"}`;
         }
 
         // ── AI call helpers ────────────────────────────────────────────────
@@ -1308,6 +1391,10 @@ Return ONLY valid JSON — no other text:
             document.getElementById('chapter-btns').innerHTML =
                 '<span style="font-size:0.8em;font-style:italic;opacity:0.6;">Loading chapters…</span>';
 
+            // Update chapter data link to open chaptest for this book
+            const chaptestLink = document.getElementById('chaptest-link');
+            chaptestLink.href = `chaptest.html?u=${currentBook.userid}&a=${encodeURIComponent(currentBook.author)}&s=${encodeURIComponent(currentBook.series)}&b=${encodeURIComponent(currentBook.bookid)}`;
+
             loadRegister();
             loadMap(currentBook, 0, preferred0);
             loadChapters(currentBook);
@@ -1435,18 +1522,19 @@ Return ONLY valid JSON — no other text:
             const chapter = allChapters.find(c => c.num === chNum);
             if (!chapter) return;
 
+            // Close any open group popup
+            document.getElementById('group-popup').style.display = 'none';
+
             // 1. Left sidebar — characters IN this chapter
             updateChapterSidebar(chapter);
 
             // 2. Glow the region where this chapter takes place
             glowChapterRegion(chapter);
 
-            // 3. Plot PREVIOUS chapter's characters (positions at START of this chapter)
+            // 3. Plot THIS chapter's characters at their current positions
             document.getElementById('character-layer').innerHTML = '';
-            const prevChapter = allChapters.find(c => c.num === chNum - 1);
-            if (prevChapter) {
-                await plotChapterCharacters(prevChapter, chNum);
-            }
+            document.getElementById('halo-layer').innerHTML = '';
+            await plotCurrentChapterCharacters(chapter);
         }
 
         // ── Update left sidebar with this chapter's characters ─────────────
@@ -1454,30 +1542,34 @@ Return ONLY valid JSON — no other text:
             document.getElementById('chapter-sidebar-title').textContent =
                 chapter.title || `Chapter ${chapter.num}`;
 
-            const chars = (chapter.characters || []).filter(c =>
-                c.status !== 'referenced_only'
-            );
+            // Show ALL characters so we can see what's actually in the data
+            const chars = chapter.characters || [];
 
             document.getElementById('chapter-sidebar-sub').textContent =
                 chars.length
-                    ? `${chars.length} character${chars.length !== 1 ? 's' : ''} in this chapter`
-                    : 'No characters tracked';
+                    ? `${chars.length} character${chars.length !== 1 ? 's' : ''}`
+                    : 'No data in vault';
 
             const list = document.getElementById('chapter-char-list');
             if (!chars.length) {
                 list.innerHTML =
-                    '<div style="padding:10px;font-size:0.8em;font-style:italic;color:#888;">No characters tracked.</div>';
+                    '<div style="padding:10px;font-size:0.78em;font-style:italic;color:#888;">' +
+                    'No characters saved for this chapter.<br><br>' +
+                    'This usually means the Scribe\'s Pass 1 did not run or returned empty results.' +
+                    '</div>';
                 return;
             }
 
             list.innerHTML = chars.map(c => {
                 const colour = colourForCharacter(c.name);
+                const s      = c.status || 'unknown';
                 return `
                     <div class="ch-char-row">
                         <span class="char-swatch" style="background:${colour};flex-shrink:0;margin-top:2px;"></span>
                         <div style="flex:1;min-width:0;">
                             <div class="ch-char-name">${c.name}</div>
                             <div class="ch-char-loc">${c.location_description || '—'}</div>
+                            <span class="status-badge s-${s}" style="font-size:0.6em;margin-top:2px;display:inline-block;">${s.replace(/_/g,' ')}</span>
                         </div>
                     </div>`;
             }).join('');
@@ -1490,7 +1582,7 @@ Return ONLY valid JSON — no other text:
             if (!mapLedger) return;
 
             const placed = (chapter.characters || []).filter(c =>
-                ['placed', 'group_implied', 'vague'].includes(c.status) && c.location_description
+                ['placed', 'travelling', 'vague'].includes(c.status) && c.location_description
             );
             if (!placed.length) return;
 
@@ -1532,73 +1624,126 @@ Return ONLY valid JSON — no other text:
             }
         }
 
-        // ── Plot previous chapter's characters as tiny diamond symbols ──────
-        async function plotChapterCharacters(chapter, forChapterNum) {
-            // Use cache if we already resolved this chapter
+        // ── Plot current chapter's characters ──────────────────────────────
+        async function plotCurrentChapterCharacters(chapter) {
             if (pass2Cache[chapter.num]) {
-                renderPreviousCharacters(pass2Cache[chapter.num]);
+                renderCurrentCharacters(pass2Cache[chapter.num]);
                 return;
             }
 
             const placeables = (chapter.characters || []).filter(c =>
-                ['placed', 'vague', 'group_implied'].includes(c.status) && c.location_description
+                ['placed', 'travelling', 'vague'].includes(c.status) && c.location_description
             );
             if (!placeables.length) return;
 
-            setStatus(`Locating ${placeables.length} character(s) from previous chapter…`);
+            // Build work list — one entry per group, one per solo character
+            const processedGroups = new Set();
+            const workList = [];
+            for (const char of placeables) {
+                if (char.group_name) {
+                    if (!processedGroups.has(char.group_name)) {
+                        processedGroups.add(char.group_name);
+                        const members = placeables
+                            .filter(c => c.group_name === char.group_name)
+                            .map(c => c.name);
+                        workList.push({ type: 'group', group_name: char.group_name, members, rep: char });
+                    }
+                } else {
+                    workList.push({ type: 'solo', rep: char });
+                }
+            }
+
+            setStatus(`Locating ${workList.length} position(s) for chapter ${chapter.num}…`);
             const placements = [];
 
-            for (const char of placeables) {
-                if (activeChapterNum !== forChapterNum) return; // user clicked elsewhere
-                const colour = colourForCharacter(char.name);
+            for (const item of workList) {
+                if (activeChapterNum !== chapter.num) return; // user clicked away
+                const rep    = item.rep;
+                const label  = item.type === 'group' ? item.group_name : rep.name;
+                const colour = colourForCharacter(item.type === 'group' ? item.members[0] : rep.name);
+
                 try {
-                    const raw    = await callAI(buildPass2Prompt(char.name, char.location_description),
-                                                `Place ${char.name}.`);
-                    const result = JSON.parse(raw);
-                    const x = parseFloat(result.x), y = parseFloat(result.y);
-                    if (!isNaN(x) && !isNaN(y)) placements.push({ name: char.name, x, y, colour });
+                    if (rep.status === 'travelling' && rep.journey_from && rep.journey_to) {
+                        // Journey placement — midpoint + halo + arrow
+                        const raw    = await callAI(
+                            buildPass2JourneyPrompt(label, rep.journey_from, rep.journey_to),
+                            `Place ${label} on their journey.`
+                        );
+                        const result = JSON.parse(raw);
+                        const x = parseFloat(result.x), y = parseFloat(result.y);
+                        if (!isNaN(x) && !isNaN(y)) {
+                            placements.push({
+                                name:          label,
+                                x, y, colour,
+                                type:          'journey',
+                                group_members: item.type === 'group' ? item.members : null,
+                                direction_deg: parseFloat(result.direction_deg) || 0,
+                                halo_radius:   parseFloat(result.halo_radius)   || 8
+                            });
+                        }
+                    } else {
+                        // Standard placement — fixed or vague location
+                        const jitter = () => (Math.random() - 0.5) * 1.6;
+                        const raw    = await callAI(
+                            buildPass2Prompt(label, rep.location_description),
+                            `Place ${label}.`
+                        );
+                        const result = JSON.parse(raw);
+                        // Apply jitter to solo pins only (groups get a clean position)
+                        const x = parseFloat(result.x) + (item.type === 'solo' ? jitter() : 0);
+                        const y = parseFloat(result.y) + (item.type === 'solo' ? jitter() : 0);
+                        if (!isNaN(x) && !isNaN(y)) {
+                            placements.push({
+                                name:          label,
+                                x, y, colour,
+                                type:          item.type,      // 'solo' or 'group'
+                                group_members: item.type === 'group' ? item.members : null,
+                                direction_deg: null,
+                                halo_radius:   null
+                            });
+                        }
+                    }
                 } catch (err) {
-                    console.warn(`Could not place ${char.name}:`, err.message);
+                    console.warn(`Could not place ${label}:`, err.message);
                 }
             }
 
             pass2Cache[chapter.num] = placements;
-            if (activeChapterNum === forChapterNum) {
-                renderPreviousCharacters(placements);
-                setStatus(`${placements.length} character(s) plotted from previous chapter.`, 5000);
+            if (activeChapterNum === chapter.num) {
+                renderCurrentCharacters(placements);
+                setStatus(`${placements.length} position(s) plotted for chapter ${chapter.num}.`, 5000);
             }
         }
 
-        // ── Render previous-chapter characters as small diamonds ───────────
-        function renderPreviousCharacters(placements) {
+        // ── Render current chapter — solos, groups, journeys ──────────────
+        let openGroupName = null;  // tracks which group popup is showing
+
+        function renderCurrentCharacters(placements) {
+            document.getElementById('character-layer').innerHTML = '';
+            document.getElementById('halo-layer').innerHTML     = '';
+
+            // Draw journey halos first (behind everything)
+            placements.filter(p => p.type === 'journey').forEach(p => {
+                const haloLayer = document.getElementById('halo-layer');
+                const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                halo.setAttribute('cx', p.x);
+                halo.setAttribute('cy', p.y);
+                halo.setAttribute('r',  p.halo_radius);
+                halo.setAttribute('fill',         p.colour);
+                halo.setAttribute('fill-opacity',  '0.12');
+                halo.setAttribute('stroke',        p.colour);
+                halo.setAttribute('stroke-opacity','0.35');
+                halo.setAttribute('stroke-width',  '0.5');
+                halo.setAttribute('stroke-dasharray', '1.5 1.5');
+                haloLayer.appendChild(halo);
+            });
+
+            // Draw all pins
             const layer = document.getElementById('character-layer');
-            layer.innerHTML = '';
-            placements.forEach(({ name, x, y, colour }) => {
-                const g  = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-                const sz = 1.6;
-                const d  = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-                d.setAttribute('points',
-                    `${x},${y-sz} ${x+sz},${y} ${x},${y+sz} ${x-sz},${y}`);
-                d.setAttribute('fill', colour);
-                d.setAttribute('stroke', 'white');
-                d.setAttribute('stroke-width', '0.4');
-                d.setAttribute('opacity', '0.85');
-
-                const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                t.setAttribute('x', x);
-                t.setAttribute('y', parseFloat(y) + 4.5);
-                t.setAttribute('text-anchor', 'middle');
-                t.setAttribute('font-size', '2.4');
-                t.setAttribute('font-weight', 'bold');
-                t.setAttribute('fill', colour);
-                t.setAttribute('stroke', 'white');
-                t.setAttribute('stroke-width', '0.35');
-                t.setAttribute('paint-order', 'stroke');
-                t.setAttribute('opacity', '0.85');
-                t.textContent = name;
-
-                g.appendChild(d); g.appendChild(t);
-                layer.appendChild(g);
+            placements.forEach(p => {
+                if      (p.type === 'journey') renderJourneyPin(layer, p);
+                else if (p.type === 'group')   renderGroupPin(layer, p);
+                else                           renderSoloPin(layer, p);
             });
 
             if (!charsVisible) {
@@ -1607,6 +1752,211 @@ Return ONLY valid JSON — no other text:
                 toggleChars.classList.add('active');
             }
         }
+
+        function renderSoloPin(layer, p) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', p.x); circle.setAttribute('cy', p.y); circle.setAttribute('r', 2);
+            circle.setAttribute('fill', p.colour); circle.setAttribute('stroke', 'white');
+            circle.setAttribute('stroke-width', '0.5');
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', p.x); label.setAttribute('y', parseFloat(p.y) + 4.8);
+            label.setAttribute('text-anchor', 'middle'); label.setAttribute('font-size', '3');
+            label.setAttribute('font-weight', 'bold');
+            label.setAttribute('fill', p.colour); label.setAttribute('stroke', 'white');
+            label.setAttribute('stroke-width', '0.4'); label.setAttribute('paint-order', 'stroke');
+            label.textContent = p.name;
+            g.appendChild(circle); g.appendChild(label);
+            layer.appendChild(g);
+        }
+
+        function renderGroupPin(layer, p) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.style.cursor = 'pointer';
+
+            // Larger circle with double stroke to signal it's a group
+            const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            outer.setAttribute('cx', p.x); outer.setAttribute('cy', p.y); outer.setAttribute('r', 3.2);
+            outer.setAttribute('fill', 'none'); outer.setAttribute('stroke', p.colour);
+            outer.setAttribute('stroke-width', '0.6'); outer.setAttribute('opacity', '0.7');
+
+            const inner = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            inner.setAttribute('cx', p.x); inner.setAttribute('cy', p.y); inner.setAttribute('r', 2.2);
+            inner.setAttribute('fill', p.colour); inner.setAttribute('stroke', 'white');
+            inner.setAttribute('stroke-width', '0.5');
+
+            const count = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            count.setAttribute('x', p.x); count.setAttribute('y', parseFloat(p.y) + 0.9);
+            count.setAttribute('text-anchor', 'middle'); count.setAttribute('font-size', '2.5');
+            count.setAttribute('font-weight', 'bold'); count.setAttribute('fill', 'white');
+            count.textContent = p.group_members ? p.group_members.length : '?';
+
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', p.x); label.setAttribute('y', parseFloat(p.y) + 5.6);
+            label.setAttribute('text-anchor', 'middle'); label.setAttribute('font-size', '2.8');
+            label.setAttribute('font-weight', 'bold');
+            label.setAttribute('fill', p.colour); label.setAttribute('stroke', 'white');
+            label.setAttribute('stroke-width', '0.4'); label.setAttribute('paint-order', 'stroke');
+            label.textContent = p.name;
+
+            g.appendChild(outer); g.appendChild(inner); g.appendChild(count); g.appendChild(label);
+            layer.appendChild(g);
+
+            // Click to toggle group member popup
+            g.addEventListener('click', (evt) => {
+                evt.stopPropagation();
+                const popup = document.getElementById('group-popup');
+                if (openGroupName === p.name && popup.style.display !== 'none') {
+                    popup.style.display = 'none';
+                    openGroupName = null;
+                    return;
+                }
+                openGroupName = p.name;
+                document.getElementById('group-popup-title').textContent = p.name;
+                document.getElementById('group-popup-list').innerHTML =
+                    (p.group_members || []).map(m => {
+                        const col = colourForCharacter(m);
+                        return `<li><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};margin-right:5px;vertical-align:middle;"></span>${m}</li>`;
+                    }).join('');
+                // Position popup near click, keeping it on screen
+                const px = Math.min(evt.clientX + 8, window.innerWidth  - 230);
+                const py = Math.min(evt.clientY + 8, window.innerHeight - 200);
+                popup.style.left    = px + 'px';
+                popup.style.top     = py + 'px';
+                popup.style.display = 'block';
+            });
+        }
+
+        function renderJourneyPin(layer, p) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+            // Hollow circle — indicates approximate position
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', p.x); circle.setAttribute('cy', p.y); circle.setAttribute('r', 2);
+            circle.setAttribute('fill', 'none');
+            circle.setAttribute('stroke', p.colour); circle.setAttribute('stroke-width', '0.8');
+
+            // Direction arrow
+            const deg    = p.direction_deg || 0;
+            const rad    = deg * Math.PI / 180;
+            const arrowLen = 5;
+            const tx = p.x + Math.sin(rad) * arrowLen;
+            const ty = p.y - Math.cos(rad) * arrowLen;
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', p.x); line.setAttribute('y1', p.y);
+            line.setAttribute('x2', tx);  line.setAttribute('y2', ty);
+            line.setAttribute('stroke', p.colour); line.setAttribute('stroke-width', '0.7');
+            line.setAttribute('stroke-opacity', '0.85');
+
+            // Arrowhead triangle at tip
+            const headLen  = 2;
+            const headWid  = 1;
+            const bx = tx - Math.sin(rad) * headLen;
+            const by = ty + Math.cos(rad) * headLen;
+            const p1x = bx + Math.cos(rad) * headWid;
+            const p1y = by + Math.sin(rad) * headWid;
+            const p2x = bx - Math.cos(rad) * headWid;
+            const p2y = by - Math.sin(rad) * headWid;
+            const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            head.setAttribute('points', `${tx},${ty} ${p1x},${p1y} ${p2x},${p2y}`);
+            head.setAttribute('fill', p.colour); head.setAttribute('opacity', '0.85');
+
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', p.x); label.setAttribute('y', parseFloat(p.y) + 4.8);
+            label.setAttribute('text-anchor', 'middle'); label.setAttribute('font-size', '2.8');
+            label.setAttribute('font-weight', 'bold');
+            label.setAttribute('fill', p.colour); label.setAttribute('stroke', 'white');
+            label.setAttribute('stroke-width', '0.4'); label.setAttribute('paint-order', 'stroke');
+            label.textContent = p.name;
+
+            // If this is a group journey, also show member count
+            if (p.group_members && p.group_members.length > 1) {
+                const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                outer.setAttribute('cx', p.x); outer.setAttribute('cy', p.y); outer.setAttribute('r', 3.2);
+                outer.setAttribute('fill', 'none'); outer.setAttribute('stroke', p.colour);
+                outer.setAttribute('stroke-width', '0.5'); outer.setAttribute('stroke-dasharray', '1 1');
+                outer.setAttribute('opacity', '0.6');
+                g.appendChild(outer);
+
+                g.style.cursor = 'pointer';
+                g.addEventListener('click', (evt) => {
+                    evt.stopPropagation();
+                    const popup = document.getElementById('group-popup');
+                    if (openGroupName === p.name && popup.style.display !== 'none') {
+                        popup.style.display = 'none'; openGroupName = null; return;
+                    }
+                    openGroupName = p.name;
+                    document.getElementById('group-popup-title').textContent = p.name + ' (travelling)';
+                    document.getElementById('group-popup-list').innerHTML =
+                        (p.group_members || []).map(m => {
+                            const col = colourForCharacter(m);
+                            return `<li><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};margin-right:5px;vertical-align:middle;"></span>${m}</li>`;
+                        }).join('');
+                    const px2 = Math.min(evt.clientX + 8, window.innerWidth  - 230);
+                    const py2 = Math.min(evt.clientY + 8, window.innerHeight - 200);
+                    popup.style.left    = px2 + 'px';
+                    popup.style.top     = py2 + 'px';
+                    popup.style.display = 'block';
+                });
+            }
+
+            g.appendChild(circle); g.appendChild(line); g.appendChild(head); g.appendChild(label);
+            layer.appendChild(g);
+        }
+
+        // ── Close group popup when clicking anywhere else ──────────────────
+        document.addEventListener('click', () => {
+            document.getElementById('group-popup').style.display = 'none';
+            openGroupName = null;
+        });
+        document.getElementById('group-popup-close').onclick = (e) => {
+            e.stopPropagation();
+            document.getElementById('group-popup').style.display = 'none';
+            openGroupName = null;
+        };
+
+        // ── Maps backup / restore ──────────────────────────────────────────
+        document.getElementById('backup-maps-btn').onclick = async () => {
+            const statusEl = document.getElementById('backup-status');
+            if (!currentBook) { statusEl.textContent = 'Select a book first.'; return; }
+            try {
+                statusEl.textContent = 'Reading vault…';
+                const snap = await getDoc(doc(db,
+                    'users', currentBook.userid, 'authors', currentBook.author,
+                    'series', currentBook.series, 'books', currentBook.bookid));
+                if (!snap.exists()) { statusEl.textContent = 'Book not found.'; return; }
+                const maps = snap.data().maps || [];
+                const key  = `maps_backup_${currentBook.bookid}`;
+                localStorage.setItem(key, JSON.stringify(maps));
+                const altCount = maps.reduce((s, m) => s + (m.alternates || []).length, 0);
+                statusEl.textContent =
+                    `✓ Saved: ${maps.length} map(s), ${altCount} alternate(s). Safe to re-run Scribe.`;
+            } catch (err) {
+                statusEl.textContent = 'Error: ' + err.message;
+            }
+        };
+
+        document.getElementById('restore-maps-btn').onclick = async () => {
+            const statusEl = document.getElementById('backup-status');
+            if (!currentBook) { statusEl.textContent = 'Select a book first.'; return; }
+            const key    = `maps_backup_${currentBook.bookid}`;
+            const backed = localStorage.getItem(key);
+            if (!backed) { statusEl.textContent = 'No backup found for this book.'; return; }
+            try {
+                const maps = JSON.parse(backed);
+                statusEl.textContent = 'Restoring…';
+                await updateDoc(doc(db,
+                    'users', currentBook.userid, 'authors', currentBook.author,
+                    'series', currentBook.series, 'books', currentBook.bookid),
+                    { maps });
+                const altCount = maps.reduce((s, m) => s + (m.alternates || []).length, 0);
+                statusEl.textContent =
+                    `✓ Restored: ${maps.length} map(s), ${altCount} alternate(s). Reload the page.`;
+            } catch (err) {
+                statusEl.textContent = 'Error: ' + err.message;
+            }
+        };
 
         // ── Init ───────────────────────────────────────────────────────────
         window.onload = () => {

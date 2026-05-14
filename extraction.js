@@ -1,9 +1,11 @@
-// v4.0 | extraction.js — full book intake: maps, character list, chapters, Pass 1
+// v4.3 | extraction.js — full book intake: maps, character list, chapters, Pass 1
 import { savetolibrary, uploadartifact, db } from './firebase.js';
 import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { CARTOGRAPHER_PROMPTS } from './prompts.js';
 
-const VERSION = 'v4.0';
+const VERSION  = 'v4.3';
+const RESUME_KEY = 'scribe_resume';
+let resumeData = null;  // populated when user clicks "Resume"
 const USERID  = 'default-user';
 const parser  = new DOMParser();
 
@@ -25,6 +27,33 @@ function log(msg, isError = false) {
     statusLog.scrollTop = statusLog.scrollHeight;
     console.log(`[scribe ${VERSION}] ${msg}`);
 }
+
+// Thematic in-world commentary shown alongside the technical log
+function commentLog(msg) {
+    const entry = document.createElement('div');
+    entry.textContent = `✦ ${msg}`;
+    entry.style.color      = 'var(--earth-brown, #6a4f4b)';
+    entry.style.fontStyle  = 'italic';
+    entry.style.marginTop  = '4px';
+    entry.style.marginBottom = '2px';
+    statusLog.appendChild(entry);
+    statusLog.scrollTop = statusLog.scrollHeight;
+}
+
+const PASS1_QUIPS = [
+    'eyeballing rogues and scoundrels…',
+    'identifying suspicious characters…',
+    'sticking pins on the map…',
+    'marking the wanderers and the lost…',
+    'noting who lurks in the shadows…',
+    'cross-referencing the fellowship…',
+    'tracking the brave and the fallen…',
+    'consulting the oracle on distant characters…',
+    'tracing footprints across the realm…',
+    'noting allegiances and enmities…',
+    'logging the deeds of heroes and villains alike…',
+    'squinting at the small print…',
+];
 
 // ── Stage UI control ─────────────────────────────────────────────────────────
 function setStage(id, status, detail = null) {
@@ -73,7 +102,26 @@ function showFileChosen(file) {
     fileChosen.textContent = `${file.name}  (${(file.size / 1024).toFixed(0)} KB)`;
     fileChosen.style.display = 'block';
     processButton.disabled = false;
+    resumeData = null; // reset on new file selection
+    checkForResume(file);
 }
+
+// Wire up resume panel buttons (safe even if elements don't exist)
+document.getElementById('resume-btn')?.addEventListener('click', () => {
+    const saved = localStorage.getItem(RESUME_KEY);
+    if (saved) {
+        resumeData = JSON.parse(saved);
+        log(`resume loaded — will skip chunks 1–${resumeData.chunksDone}, starting from chunk ${resumeData.chunksDone + 1}.`);
+    }
+    document.getElementById('resume-panel').style.display = 'none';
+});
+
+document.getElementById('resume-discard-btn')?.addEventListener('click', () => {
+    clearProgress();
+    resumeData = null;
+    document.getElementById('resume-panel').style.display = 'none';
+    log('saved progress discarded — will run from the beginning.');
+});
 
 // ── Utility: file → base64 ───────────────────────────────────────────────────
 function getBase64(blob) {
@@ -150,6 +198,59 @@ async function callAI(systemPrompt, userContent, aiModel, keys) {
         return callOpenAI(systemPrompt, userContent, keys.openai);
     }
     throw new Error('No API key available. Visit API Settings first.');
+}
+
+// ── AI call with automatic retry on transient errors ─────────────────────────
+async function callAIWithRetry(systemPrompt, userContent, aiModel, keys, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+        try {
+            return await callAI(systemPrompt, userContent, aiModel, keys);
+        } catch (err) {
+            if (attempt > maxRetries) throw err;
+            const delaySec = attempt * 12; // 12s, 24s, 36s
+            log(`  attempt ${attempt} failed: "${err.message.substring(0, 80)}" — retrying in ${delaySec}s…`);
+            await new Promise(r => setTimeout(r, delaySec * 1000));
+        }
+    }
+}
+
+// ── Resume progress helpers ───────────────────────────────────────────────────
+function saveProgress(filename, fileSize, bookIds, bookData, register, chunksDone, totalChunks, allResults) {
+    try {
+        localStorage.setItem(RESUME_KEY, JSON.stringify({
+            filename, fileSize, bookIds, bookData, register,
+            chunksDone, totalChunks, allResults,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        log('  (could not save progress to localStorage — storage may be full)');
+    }
+}
+
+function clearProgress() {
+    localStorage.removeItem(RESUME_KEY);
+}
+
+function checkForResume(file) {
+    const resumePanel = document.getElementById('resume-panel');
+    if (!resumePanel) return;
+    const saved = localStorage.getItem(RESUME_KEY);
+    if (!saved) { resumePanel.style.display = 'none'; return; }
+    try {
+        const data = JSON.parse(saved);
+        if (data.filename === file.name && data.fileSize === file.size) {
+            const ageMin = Math.round((Date.now() - data.timestamp) / 60000);
+            const ageStr = ageMin < 60 ? `${ageMin} minute${ageMin !== 1 ? 's' : ''}` : `${Math.round(ageMin / 60)} hours`;
+            document.getElementById('resume-message').innerHTML =
+                `<strong>${data.chunksDone} of ${data.totalChunks} chunks already processed</strong> — saved ${ageStr} ago.` +
+                `<br><span style="font-size:0.88em;opacity:0.8;">${data.allResults.length} chapter(s) in the vault so far.</span>`;
+            resumePanel.style.display = 'block';
+        } else {
+            resumePanel.style.display = 'none';
+        }
+    } catch (e) {
+        resumePanel.style.display = 'none';
+    }
 }
 
 // ── Image orientation check and rotation (unchanged from v3) ─────────────────
@@ -322,27 +423,68 @@ Return ONLY valid JSON — no other text:
 }
 
 // ── Build Pass 1 system prompt ────────────────────────────────────────────────
-function buildPass1Prompt(registerText) {
+function buildPass1Prompt(registerText, bookTitle = '', bookAuthor = '') {
+    const bookCtx = bookTitle
+        ? `BOOK: "${bookTitle}"${bookAuthor ? ` by ${bookAuthor}` : ''}.
+You have knowledge of this book's world from your training data. Use that knowledge to correctly resolve location names, geographic relationships, and character identities. However, process the text objectively — do not add characters or events that are not in the chapters provided.
+
+`
+        : '';
+
     return `You are a character extraction assistant for a fantasy novel reader application.
 
-Your task: read a complete novel provided as numbered chapters and for EACH chapter, identify every character who is PHYSICALLY PRESENT, reporting their location at the END of that chapter.
+${bookCtx}Your task: read the novel chapters provided and for EACH chapter, identify every character who is PHYSICALLY PRESENT, reporting their location at the END of that chapter.
 
 CHARACTER REGISTER (canonical names and known aliases):
 ${registerText}
 
-INSTRUCTIONS:
-1. Process EVERY chapter. Return a characters array for each (it may be empty if no named characters have a clear location).
-2. Only include characters physically present in the scene. Exclude characters mentioned in dialogue, memory, or flashback.
-3. Report each character's location at the END of the chapter. If they move, report their final position.
-4. For group travel ("they rode north"), give each named member their own entry with status "group_implied" and the same location.
-5. Resolve aliases and epithets to canonical names from the register where possible.
-6. Assign a status to each character:
-   placed | vague | no_location | off_map | wrong_map | referenced_only | group_implied | new_character | ambiguous
-7. Assign confidence: high | medium | low
-8. CRITICAL — location_description must name the SETTLEMENT, FORTRESS, REGION or NAMED GEOGRAPHIC FEATURE where the character is.
-   Do NOT describe their position within a building (room, chamber, doorway, tower, hall).
-   If a character is inside a building, name the settlement that building belongs to.
-   Example: write "Murias" not "in the great hall of Murias".
+═══ LOCATION RULES (read carefully — these are the most important instructions) ═══
+
+RULE 1 — USE SETTLEMENT OR REGION LEVEL ONLY.
+location_description must name a SETTLEMENT, FORTRESS, CITY, REGION, or NAMED GEOGRAPHIC FEATURE.
+NEVER use room names, corridor descriptions, building interiors, or sub-features.
+❌ WRONG: "a corridor in Urithiru", "the throne room", "a crevice on the plateau", "a tavern in the city"
+✓ RIGHT:  "Urithiru", "the Shattered Plains", "Kholinar", "the Frostlands"
+
+RULE 2 — CLIMB THE GEOGRAPHIC HIERARCHY.
+If the exact place is not itself a named location, use its containing settlement, then its containing region.
+e.g. "the great hall of Kharbranth" → "Kharbranth"
+e.g. "a street near the market in Luthadel" → "Luthadel"
+Use your world knowledge to resolve this hierarchy for known fantasy settings.
+
+RULE 3 — SHARED SCENES MEAN SHARED LOCATIONS.
+If two or more characters are shown in direct interaction (conversation, combat, shared meal, joint activity) within the same scene, they are at the SAME location.
+Assign them identical location_description values. Do not invent separate micro-locations for characters who are clearly together.
+
+RULE 4 — TRAVELLING STATUS.
+Use "travelling" (not "vague" or "placed") when a character is clearly in transit between two named places.
+Populate journey_from and journey_to. If you know the world, you can infer the route and departure/destination even if the text is not explicit.
+If a character was at place A at the end of the previous chapter and is moving toward place B, they are travelling.
+
+RULE 5 — CONSISTENCY WITHIN A CHAPTER.
+All characters in the same scene share a scene location. If most characters in a chapter are at "the Shattered Plains", a character in that same scene should not be placed in "Kholinar" unless the text explicitly says they are elsewhere.
+
+═══ OTHER INSTRUCTIONS ═══
+
+- Process EVERY chapter. Return a characters array for each (may be empty).
+- Only include characters physically present in the scene. Exclude those mentioned in dialogue, memory, or flashback.
+- Report each character's location at the END of the chapter. If they move, report their final position.
+- Resolve aliases and epithets to canonical names from the register where possible.
+
+STATUS VALUES:
+- "placed"           — a specific named settlement or region can be identified
+- "travelling"       — in transit between two named places; populate journey_from and journey_to
+- "vague"            — only vague directional clue, no named origin or destination
+- "no_location"      — present but no location can be determined
+- "off_map"          — at a location not on any available map
+- "wrong_map"        — on a different map from the one currently active
+- "referenced_only"  — mentioned in speech/memory, not physically present
+- "new_character"    — not in the register; flag for review
+- "ambiguous"        — location genuinely cannot be reliably determined
+
+GROUP NAMES: Only assign when characters are explicitly operating as a cohesive named unit (company, fellowship, army, war band). Merely sharing a scene does not make a group. Set null for solo characters.
+
+JOURNEY FIELDS: Populate only when status is "travelling". Both journey_from and journey_to must be named places. Set null otherwise.
 
 Return ONLY valid JSON — no markdown, no explanation:
 {
@@ -354,11 +496,14 @@ Return ONLY valid JSON — no markdown, no explanation:
         {
           "name": "<canonical name>",
           "aliases_used": [],
-          "location_description": "<settlement, fortress, or region name>",
+          "group_name": "<operating group name, or null>",
+          "location_description": "<settlement, fortress, or region — never a room or interior>",
           "status": "<see above>",
+          "journey_from": "<named departure point, or null>",
+          "journey_to": "<named destination, or null>",
           "confidence": "<high|medium|low>",
           "map_hint": null,
-          "notes": ""
+          "notes": "<brief note on anything unusual or ambiguous — empty string if none>"
         }
       ]
     }
@@ -366,8 +511,8 @@ Return ONLY valid JSON — no markdown, no explanation:
 }`;
 }
 
-// ── Run Pass 1 on all story chapters (chunked at 10 chapters per call) ────────
-const CHAPTERS_PER_CHUNK = 10;
+// ── Run Pass 1 on all story chapters (chunked at 5 chapters per call) ────────
+const CHAPTERS_PER_CHUNK = 5;
 
 function updatePass1Bar(current, total) {
     const bar   = document.getElementById('pass1-progress');
@@ -380,12 +525,14 @@ function updatePass1Bar(current, total) {
     if (label) label.textContent = `chunk ${current} of ${total} complete · ${pct}%`;
 }
 
-async function runPass1(storyChapters, register, aiModel, keys) {
+async function runPass1(storyChapters, register, aiModel, keys, bookIds, bookData, filename, fileSize) {
     const registerText = register.length > 0
         ? register.map(r =>
             `  - ${r.name}` + (r.aliases.length ? ` (also known as: ${r.aliases.join(', ')})` : '')
           ).join('\n')
         : '  (none — identify all characters from the text)';
+    const bTitle  = bookData?.title  || '';
+    const bAuthor = bookData?.author || '';
 
     // Split into fixed-size chunks of CHAPTERS_PER_CHUNK
     const chunks = [];
@@ -396,18 +543,29 @@ async function runPass1(storyChapters, register, aiModel, keys) {
     const totalChunks = chunks.length;
     log(`${storyChapters.length} chapter(s) split into ${totalChunks} chunk(s) of up to ${CHAPTERS_PER_CHUNK}.`);
 
-    // Show progress bar at 0%
-    setStage('pass1', 'active', `0 of ${totalChunks} chunks complete…`);
-    updatePass1Bar(0, totalChunks);
-
+    // ── Resume: load previously saved results if resuming ─────────────────────
+    let startChunk    = 0;
     const allResults  = [];
-    let chapterOffset = 0;
 
-    for (let i = 0; i < totalChunks; i++) {
-        const chunk = chunks[i];
+    if (resumeData && resumeData.filename === filename && resumeData.fileSize === fileSize) {
+        startChunk = resumeData.chunksDone;
+        allResults.push(...resumeData.allResults);
+        log(`resuming: skipping chunks 1–${startChunk}, loading ${allResults.length} already-saved chapter(s).`);
+        updatePass1Bar(startChunk, totalChunks);
+        setStage('pass1', 'active', `Resuming from chunk ${startChunk + 1} of ${totalChunks}…`);
+    } else {
+        setStage('pass1', 'active', `0 of ${totalChunks} chunks complete…`);
+        updatePass1Bar(0, totalChunks);
+    }
+
+    let chapterOffset = startChunk * CHAPTERS_PER_CHUNK;
+
+    for (let i = startChunk; i < totalChunks; i++) {
+        const chunk    = chunks[i];
         const chunkNum = i + 1;
 
         setStage('pass1', 'active', `Reading chunk ${chunkNum} of ${totalChunks}…`);
+        commentLog(PASS1_QUIPS[(chunkNum - 1) % PASS1_QUIPS.length]);
         log(`chunk ${chunkNum} of ${totalChunks}: chapters ${chapterOffset + 1}–${chapterOffset + chunk.length}`);
 
         const chapterBlocks = chunk.map((ch, j) =>
@@ -417,17 +575,22 @@ async function runPass1(storyChapters, register, aiModel, keys) {
         const roughTokens = Math.round(chapterBlocks.length / 4);
         log(`  estimated tokens: ~${roughTokens.toLocaleString()}`);
 
-        const sysPrompt   = buildPass1Prompt(registerText);
+        const sysPrompt   = buildPass1Prompt(registerText, bTitle, bAuthor);
         const userContent = 'Novel text:\n\n' + chapterBlocks;
 
         let raw;
         try {
-            raw = await callAI(sysPrompt, userContent, aiModel, keys);
+            raw = await callAIWithRetry(sysPrompt, userContent, aiModel, keys);
         } catch (aiErr) {
-            log(`  chunk ${chunkNum} AI error: ${aiErr.message} — skipping`, true);
+            // Save progress before stopping so the user can resume
+            saveProgress(filename, fileSize, bookIds, bookData, register, i, totalChunks, allResults);
+            setStage('pass1', 'error', `Chunk ${chunkNum} failed after retries — progress saved. Reload and resume.`);
+            log(`  chunk ${chunkNum} failed after retries: ${aiErr.message}`, true);
+            log(`  progress saved — reload the page, re-select the same file, and click Resume.`, true);
             chapterOffset += chunk.length;
             updatePass1Bar(chunkNum, totalChunks);
-            continue;
+            // Return what we have so far — the vault stage will save partial results
+            return { results: allResults, complete: false };
         }
 
         let chapterResults = [];
@@ -450,9 +613,36 @@ async function runPass1(storyChapters, register, aiModel, keys) {
         chapterOffset += chunk.length;
         updatePass1Bar(chunkNum, totalChunks);
         log(`  chunk ${chunkNum} complete — ${chapterResults.length} chapter(s) processed.`);
+
+        // Save this chunk's chapters to Firestore immediately — don't wait for the end
+        try {
+            const { userId, authorId, seriesId, bookId } = bookIds;
+            for (const ch of chapterResults) {
+                const chapterRef = doc(
+                    db,
+                    'users', userId,
+                    'authors', authorId,
+                    'series', seriesId,
+                    'books', bookId,
+                    'chapters', String(ch.chapter_num)
+                );
+                await setDoc(chapterRef, {
+                    num:        ch.chapter_num,
+                    title:      ch.title,
+                    characters: ch.characters || [],
+                    processed:  new Date().toISOString()
+                });
+            }
+            log(`  chunk ${chunkNum} committed to vault.`);
+        } catch (saveErr) {
+            log(`  WARNING: could not save chunk ${chunkNum} to Firestore: ${saveErr.message}`, true);
+        }
+
+        // Save resume progress to localStorage after every successful chunk
+        saveProgress(filename, fileSize, bookIds, bookData, register, chunkNum, totalChunks, allResults);
     }
 
-    return allResults;
+    return { results: allResults, complete: true };
 }
 
 // ── Save chapter character data to Firestore ──────────────────────────────────
@@ -493,6 +683,7 @@ processButton.onclick = async () => {
     });
 
     log(`scribe ${VERSION} starting...`);
+    commentLog('The scribe takes up the quill… let us begin.');
 
     const aiModel = document.querySelector('input[name="ai-model"]:checked').value;
     const keys = {
@@ -507,6 +698,7 @@ processButton.onclick = async () => {
     try {
 
         // ── STAGE 1: Unseal the tome ───────────────────────────────────────
+        commentLog('Cracking the spine of the ancient text…');
         setStage('parse', 'active', 'Reading epub…');
 
         const file = fileInput.files[0];
@@ -515,7 +707,6 @@ processButton.onclick = async () => {
         const openaiKey = keys.openai;
         if (!openaiKey && aiModel === 'openai') throw new Error('No OpenAI key found. Visit API Settings.');
         if (!keys.gemini && aiModel === 'gemini') throw new Error('No Gemini key found. Visit API Settings.');
-        if (!openaiKey) throw new Error('OpenAI key is required for image classification (cover / map detection). Visit API Settings.');
 
         if (typeof JSZip === 'undefined') throw new Error('JSZip not loaded — please reload the page.');
 
@@ -565,88 +756,22 @@ processButton.onclick = async () => {
 
         const storagePath = `users/${userId}/${authorId}/${seriesId}/${bookId}`;
 
-        let bookData = { title, author, series, maps: [], cover: null, created: Date.now() };
+        let bookData = { title, author, series, created: Date.now() };
+        // Do NOT include maps or cover here — merge would overwrite existing values with empty ones.
+        // Maps and cover are managed separately via mybook / mapgen and must be preserved.
         await savetolibrary({ userid: userId, author: authorId, series: seriesId, bookid: bookId }, bookData);
+        bookData.maps  = [];   // local only — used by image stage if re-enabled
+        bookData.cover = null; // local only
         log('initial book record saved.');
 
         setStage('parse', 'done', `${title} by ${author}`);
 
-        // ── STAGE 2: Catalogue images ──────────────────────────────────────
-        setStage('images', 'active', 'Scanning for maps and cover…');
-
-        const imageFiles = Object.keys(zip.files).filter(f => /\.(jpg|jpeg|png|gif)$/i.test(f));
-        log(`${imageFiles.length} image(s) found.`);
-
-        for (const path of imageFiles) {
-            const filename = path.split('/').pop();
-            log(`analysing: ${filename}`);
-            try {
-                const imgBlob    = await zip.file(path).async('blob');
-                const base64Data = await getBase64(imgBlob);
-                const mimeType   = imgBlob.type || 'image/jpeg';
-
-                const prompt      = CARTOGRAPHER_PROMPTS.describeImagePrompt();
-                const description = await (async () => {
-                    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
-                        body: JSON.stringify({
-                            model: 'gpt-4o-mini',
-                            messages: [{
-                                role: 'user',
-                                content: [
-                                    { type: 'text', text: prompt },
-                                    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } }
-                                ]
-                            }],
-                            max_tokens: 800
-                        })
-                    });
-                    const d = await res.json();
-                    if (d.error) throw new Error(d.error.message);
-                    return d.choices[0].message.content || '';
-                })();
-
-                const upper    = description.toUpperCase();
-                let   category = 'OTHER';
-                if (upper.includes('COVER'))        category = 'COVER';
-                else if (upper.includes('MAP'))      category = 'MAP';
-                else if (upper.includes('ILLUSTR'))  category = 'ILLUSTRATION';
-                else if (upper.includes('ICON'))     category = 'ICON';
-                log(`  ${filename} → ${category}`);
-
-                if (category === 'COVER' && !bookData.cover) {
-                    const coverUrl = await uploadartifact(`${storagePath}/cover.jpg`, imgBlob);
-                    if (coverUrl) { bookData.cover = coverUrl; log('  cover stored.'); }
-
-                } else if (category === 'MAP') {
-                    log('  checking map orientation…');
-                    const orientation = await checkOrientation(base64Data, mimeType, openaiKey);
-                    log(`  orientation: ${orientation}`);
-                    let uploadBlob = imgBlob;
-                    if (orientation !== 'CORRECT') {
-                        const degrees = parseInt(orientation.split('_')[1]);
-                        uploadBlob = await rotateBlob(imgBlob, degrees);
-                        log(`  rotated ${degrees}°.`);
-                    }
-                    const mapUrl = await uploadartifact(`${storagePath}/maps/${filename}`, uploadBlob);
-                    if (mapUrl) {
-                        bookData.maps.push({ name: filename, url: mapUrl, source: 'epub', alternates: [], preferred: 'original' });
-                        statMaps++;
-                        log('  map stored.');
-                    }
-                }
-
-                await savetolibrary({ userid: userId, author: authorId, series: seriesId, bookid: bookId }, bookData);
-
-            } catch (imgErr) {
-                log(`  ERROR on ${filename}: ${imgErr.message}`, true);
-            }
-        }
-
-        setStage('images', 'done', `${statMaps} map(s) · cover: ${bookData.cover ? 'yes' : 'no'}`);
+        // ── STAGE 2: Catalogue images (skipped — maps added manually via mybook) ──
+        log('image stage skipped — maps are managed manually via My Book.');
+        setStage('images', 'skipped', 'maps managed manually');
 
         // ── STAGE 3: Find character list ────────────────────────────────────
+        commentLog('Consulting the dramatis personae… cataloguing the cast of characters…');
         setStage('charlist', 'active', 'Searching for dramatis personae…');
         log('extracting all epub sections…');
 
@@ -686,6 +811,7 @@ processButton.onclick = async () => {
         }
 
         // ── STAGE 4: Gather story chapters ─────────────────────────────────
+        commentLog('Turning the pages… separating the chapters from the fore-matter…');
         setStage('chapters', 'active', 'Identifying story chapters…');
 
         const storyChapters = allSections.filter(s => s.classification === 'chapter');
@@ -700,20 +826,34 @@ processButton.onclick = async () => {
         setStage('chapters', 'done', `${statChapters} chapter(s) ready`);
 
         // ── STAGE 5: The Scribe Reads (Pass 1) ─────────────────────────────
+        commentLog('The scribe leans forward, quill at the ready… reading the tale from the beginning…');
         setStage('pass1', 'active', `Sending to ${aiModel === 'gemini' ? 'Gemini' : 'OpenAI'}…`);
         log('running Pass 1 character extraction…');
 
         let chapterResults = [];
+        let pass1Complete  = false;
         try {
-            chapterResults = await runPass1(storyChapters, characterRegister, aiModel, keys);
+            const pass1 = await runPass1(
+                storyChapters, characterRegister, aiModel, keys,
+                bookIds, bookData, file.name, file.size
+            );
+            chapterResults = pass1.results;
+            pass1Complete  = pass1.complete;
             statAppearances = chapterResults.reduce(
                 (sum, ch) => sum + (ch.characters?.filter(c =>
-                    ['placed','vague','group_implied'].includes(c.status)
+                    ['placed','travelling','vague'].includes(c.status)
                 ).length || 0),
                 0
             );
-            log(`Pass 1 complete. ${chapterResults.length} chapter(s) processed.`);
-            setStage('pass1', 'done', `${chapterResults.length} chapter(s) · ${statAppearances} placeable character positions`);
+            if (pass1Complete) {
+                log(`Pass 1 complete. ${chapterResults.length} chapter(s) processed.`);
+                commentLog('The scribe sets down the quill. All deeds have been noted.');
+                setStage('pass1', 'done', `${chapterResults.length} chapter(s) · ${statAppearances} placeable character positions`);
+            } else {
+                log(`Pass 1 stopped early. ${chapterResults.length} chapter(s) saved so far — resume to continue.`);
+                commentLog('The scribe pauses… progress has been saved. Reload and resume when ready.');
+                setStage('pass1', 'error', `Stopped at chunk — ${chapterResults.length} chapter(s) saved. Reload and resume.`);
+            }
         } catch (passErr) {
             log(`Pass 1 failed: ${passErr.message}`, true);
             setStage('pass1', 'error', `Failed — ${passErr.message}`);
@@ -721,13 +861,20 @@ processButton.onclick = async () => {
         }
 
         // ── STAGE 6: Inscribe the vault ─────────────────────────────────────
+        commentLog('Committing all deeds and whereabouts to the great vault…');
         setStage('vault', 'active', 'Writing to Firestore…');
         log('saving character data…');
 
         try {
             await saveChapterData(userId, authorId, seriesId, bookId, characterRegister, chapterResults);
             log('character data saved.');
-            setStage('vault', 'done', 'All data written to the vault');
+            if (pass1Complete) {
+                clearProgress();  // full run complete — discard resume data
+                resumeData = null;
+            } else {
+                log('partial run — resume data kept so you can continue.');
+            }
+            setStage('vault', 'done', pass1Complete ? 'All data written to the vault' : `${chapterResults.length} chapter(s) written — resume to complete`);
         } catch (vaultErr) {
             log(`vault save failed: ${vaultErr.message}`, true);
             setStage('vault', 'error', vaultErr.message);

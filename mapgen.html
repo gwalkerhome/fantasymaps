@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v2.9 | mapgen</title>
+    <title>v3.0 | mapgen</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -194,6 +194,7 @@
 
         <div class="tb-sep"></div>
         <button id="import-overlay-btn" class="btn secondary" title="Copy overlay from another book">import overlay</button>
+        <button id="borrow-map-btn" class="btn secondary" title="Add a map from another book (with its overlay)">borrow map</button>
 
         <div class="tb-sep"></div>
         <button id="toggle-overlay-btn" class="btn secondary active" title="Show / hide overlay">overlay ●</button>
@@ -574,13 +575,45 @@
             renderPermanent();
             setStatus('Consulting the vault…');
             try {
-                const snap = await getDoc(doc(db,'users',userid,'authors',author,
-                    'series',series,'books',bookid,'overlays',currentOverlayKey()));
+                const targetKey = currentOverlayKey();
+                const overlaysRef = collection(db,'users',userid,'authors',author,
+                    'series',series,'books',bookid,'overlays');
+
+                // Try the expected key first
+                const snap = await getDoc(doc(overlaysRef, targetKey));
                 if (snap.exists()) {
                     mapLedger = snap.data().ledger || { polygons:[],paths:[],points:[] };
                     renderPermanent();
                     const n = mapLedger.polygons.length + mapLedger.paths.length + mapLedger.points.length;
                     setStatus(`Overlay loaded — ${n} feature(s) ready.`, 3000);
+                    return;
+                }
+
+                // Not found — scan all overlay documents and load the most populated one
+                setStatus('Overlay not at expected key — scanning vault…');
+                const allSnaps = await getDocs(overlaysRef);
+                if (allSnaps.empty) {
+                    setStatus('No overlay yet — draw features to begin.', 3000);
+                    return;
+                }
+
+                let bestDoc = null, bestCount = -1;
+                allSnaps.forEach(d => {
+                    const l = d.data().ledger || { polygons:[],paths:[],points:[] };
+                    const n = l.polygons.length + l.paths.length + l.points.length;
+                    if (n > bestCount) { bestCount = n; bestDoc = d; }
+                });
+
+                if (bestDoc && bestCount > 0) {
+                    mapLedger = bestDoc.data().ledger || { polygons:[],paths:[],points:[] };
+                    renderPermanent();
+                    // Re-save under the correct key so it loads normally next time
+                    await setDoc(doc(overlaysRef, targetKey), {
+                        ledger: mapLedger,
+                        saved:  new Date().toISOString(),
+                        migratedFrom: bestDoc.id
+                    });
+                    setStatus(`Overlay recovered from "${bestDoc.id}" and re-saved — ${bestCount} feature(s) ready.`, 5000);
                 } else {
                     setStatus('No overlay yet — draw features to begin.', 3000);
                 }
@@ -799,6 +832,174 @@
                 setStatus(`Imported ${n} feature(s) from "${sourceBook.title}".`,4000);
             } catch(err) { console.error(err); setStatus('Import failed: '+err.message,5000); }
         }
+
+        // ── Borrow map from another book ─────────────────────────────────────
+        async function borrowMap() {
+            if (!userid) { setStatus('No book reference.',3000); return; }
+            showModal('Borrow a Map from Another Book',
+                `<p style="font-size:0.88em;font-style:italic;">Searching the vault…</p>`,
+                [{ label:'Cancel', cls:'secondary', onclick:hideModal }]
+            );
+            try {
+                const authSnap = await getDocs(collection(db,'users',userid,'authors'));
+                const sources = [];
+                for (const aDoc of authSnap.docs) {
+                    const sSnap = await getDocs(collection(db,'users',userid,'authors',aDoc.id,'series'));
+                    for (const sDoc of sSnap.docs) {
+                        const bSnap = await getDocs(collection(db,'users',userid,'authors',aDoc.id,'series',sDoc.id,'books'));
+                        for (const bDoc of bSnap.docs) {
+                            if (aDoc.id===author && sDoc.id===series && bDoc.id===bookid) continue;
+                            const data = bDoc.data();
+                            if (Array.isArray(data.maps) && data.maps.length > 0)
+                                sources.push({ authorId:aDoc.id, seriesId:sDoc.id, bookId:bDoc.id,
+                                               title:data.title||bDoc.id, maps:data.maps });
+                        }
+                    }
+                }
+                if (sources.length === 0) {
+                    document.getElementById('modal-body').innerHTML =
+                        `<p style="font-size:0.88em;">No other mapped books found in your library yet.</p>`;
+                    return;
+                }
+
+                document.getElementById('modal-body').innerHTML = `
+                    <label class="modal-label">Source book:</label>
+                    <select id="bm-book" class="modal-field" style="cursor:pointer">
+                        <option value="">— select a book —</option>
+                        ${sources.map((s,i)=>`<option value="${i}">${s.title}</option>`).join('')}
+                    </select>
+                    <div id="bm-map-row" style="display:none">
+                        <label class="modal-label">Source map:</label>
+                        <select id="bm-map" class="modal-field" style="cursor:pointer"></select>
+                        <div id="bm-info" class="modal-info" style="margin:8px 0;"></div>
+                        <label style="display:flex;align-items:center;gap:8px;font-size:0.88em;cursor:pointer;margin-top:4px;">
+                            <input type="checkbox" id="bm-copy-overlay" checked>
+                            Copy the overlay into this book too (if one exists)
+                        </label>
+                    </div>
+                    <p class="modal-note">The map image is shared — no data is duplicated in Storage. The overlay is copied fresh into this book.</p>
+                `;
+
+                const btnsEl  = document.getElementById('modal-buttons');
+                const addBtn  = document.createElement('button');
+                addBtn.textContent = 'Add to this book';
+                addBtn.className   = 'btn';
+                addBtn.disabled    = true;
+                addBtn.addEventListener('click', async () => {
+                    const bIdx = parseInt(document.getElementById('bm-book').value);
+                    const mIdx = parseInt(document.getElementById('bm-map').value);
+                    const copyOv = document.getElementById('bm-copy-overlay').checked;
+                    if (isNaN(bIdx)||isNaN(mIdx)) return;
+                    await doBorrowMap(sources[bIdx], mIdx, copyOv);
+                });
+                btnsEl.insertBefore(addBtn, btnsEl.firstChild);
+
+                async function loadBorrowInfo(src, mIdx) {
+                    document.getElementById('bm-info').textContent = 'Checking…';
+                    addBtn.disabled = true;
+                    try {
+                        const srcMap = src.maps[mIdx];
+                        const key    = resolveOverlayKey(srcMap, mIdx);
+                        const snap   = await getDoc(doc(db,'users',userid,'authors',src.authorId,
+                            'series',src.seriesId,'books',src.bookId,'overlays',key));
+                        if (snap.exists()) {
+                            const l = snap.data().ledger||{polygons:[],paths:[],points:[]};
+                            const n = l.polygons.length+l.paths.length+l.points.length;
+                            document.getElementById('bm-info').innerHTML =
+                                `✓ Map found · overlay has <strong>${n}</strong> feature(s).`;
+                            document.getElementById('bm-copy-overlay').checked = true;
+                        } else {
+                            document.getElementById('bm-info').textContent = 'Map found · no overlay attached.';
+                            document.getElementById('bm-copy-overlay').checked = false;
+                        }
+                        addBtn.disabled = false;
+                    } catch(e) {
+                        document.getElementById('bm-info').textContent = 'Error: '+e.message;
+                    }
+                }
+
+                document.getElementById('bm-book').onchange = function() {
+                    const bIdx = parseInt(this.value);
+                    if (isNaN(bIdx)) { document.getElementById('bm-map-row').style.display='none'; addBtn.disabled=true; return; }
+                    const src = sources[bIdx];
+                    document.getElementById('bm-map').innerHTML = src.maps.map((m,i)=>
+                        `<option value="${i}">${m.name||'Map '+(i+1)}</option>`).join('');
+                    document.getElementById('bm-map-row').style.display = 'block';
+                    loadBorrowInfo(src, 0);
+                    document.getElementById('bm-map').onchange = function() { loadBorrowInfo(src, parseInt(this.value)); };
+                };
+
+            } catch(err) {
+                document.getElementById('modal-body').innerHTML = `<p style="color:#a02020;">Error: ${err.message}</p>`;
+            }
+        }
+
+        async function doBorrowMap(sourceBook, sourceMapIdx, copyOverlay) {
+            hideModal();
+            setStatus('Borrowing map…');
+            try {
+                const srcMap = sourceBook.maps[sourceMapIdx];
+
+                // ── Read current book's maps array fresh from Firestore ───────
+                const bookRef  = doc(db,'users',userid,'authors',author,'series',series,'books',bookid);
+                const bookSnap = await getDoc(bookRef);
+                if (!bookSnap.exists()) throw new Error('Current book not found.');
+                const currentMaps = bookSnap.data().maps || [];
+
+                // ── Build the new map entry referencing the borrowed URL ──────
+                const newMapEntry = {
+                    name:         `${srcMap.name||'Map'} (from ${sourceBook.title})`,
+                    url:          srcMap.url,
+                    source:       'borrowed',
+                    borrowed_from: sourceBook.title,
+                    alternates:   [],
+                    preferred:    'original'
+                };
+                const newMapIdx = currentMaps.length;
+                currentMaps.push(newMapEntry);
+
+                // ── Save updated maps array ───────────────────────────────────
+                await updateDoc(bookRef, { maps: currentMaps });
+
+                // ── Copy overlay if requested ─────────────────────────────────
+                let overlayMsg = '';
+                if (copyOverlay) {
+                    const srcKey  = resolveOverlayKey(srcMap, sourceMapIdx);
+                    const ovSnap  = await getDoc(doc(db,'users',userid,'authors',sourceBook.authorId,
+                        'series',sourceBook.seriesId,'books',sourceBook.bookId,'overlays',srcKey));
+                    if (ovSnap.exists()) {
+                        const destKey = `map_${newMapIdx}`;
+                        const ovRef   = doc(db,'users',userid,'authors',author,'series',series,'books',bookid,'overlays',destKey);
+                        await setDoc(ovRef, {
+                            ledger:   ovSnap.data().ledger || {polygons:[],paths:[],points:[]},
+                            savedAt:  new Date().toISOString(),
+                            mapIndex: newMapIdx
+                        });
+                        const l = ovSnap.data().ledger||{polygons:[],paths:[],points:[]};
+                        const n = l.polygons.length+l.paths.length+l.points.length;
+                        overlayMsg = ` · overlay copied (${n} features)`;
+                    } else {
+                        overlayMsg = ' · no overlay found to copy';
+                    }
+                }
+
+                // ── Refresh the version selector so the new map appears ──────
+                currentBook.maps = currentMaps;
+                buildVersionSelect();
+                // Switch to the new map
+                const newVal = `${newMapIdx}|original`;
+                document.getElementById('version-select').value = newVal;
+                document.getElementById('version-select').dispatchEvent(new Event('change'));
+
+                setStatus(`Map borrowed from "${sourceBook.title}"${overlayMsg}.`, 5000);
+
+            } catch(err) {
+                console.error(err);
+                setStatus('Borrow failed: '+err.message, 5000);
+            }
+        }
+
+        document.getElementById('borrow-map-btn').addEventListener('click', borrowMap);
 
         // ── Mouse wheel zoom ──────────────────────────────────────────────────
         viewport.addEventListener('wheel', (e) => {

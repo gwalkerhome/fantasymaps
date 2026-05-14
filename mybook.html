@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v1.1 | mybook</title>
+    <title>v1.3 | mybook</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -144,6 +144,36 @@
             padding-top: 14px;
         }
 
+        /* ── Series editor ──────────────────────────────────────────────────── */
+        .series-editor {
+            border: 1px solid rgba(106, 79, 75, 0.25);
+            border-radius: 4px;
+            padding: 12px 14px;
+            margin-bottom: 20px;
+        }
+        .series-editor-title {
+            font-family: 'Cinzel', serif;
+            font-size: 0.72em; font-weight: 700;
+            color: var(--earth-brown);
+            text-transform: uppercase; letter-spacing: 0.08em;
+            margin-bottom: 10px;
+        }
+        .series-row {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 8px;
+        }
+        .series-row .label { min-width: 60px; margin-right: 0; }
+        .series-input {
+            font-family: inherit; font-size: 0.85em;
+            padding: 4px 8px;
+            border: 1px solid var(--earth-brown); border-radius: 3px;
+            background: var(--aged-parchment); color: var(--iron-ink);
+        }
+        .series-status {
+            font-size: 0.8em; font-style: italic;
+            color: var(--earth-brown); margin-left: 4px;
+        }
+
         @media (max-width: 600px) {
             .book-detail { grid-template-columns: 1fr; }
         }
@@ -160,6 +190,26 @@
 
         <div id="book-content">
             <p style="text-align: center;">consulting the vault...</p>
+        </div>
+    </div>
+
+    <!-- ── Add / restore map modal ──────────────────────────────────────────── -->
+    <div id="am-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; display:none; align-items:center; justify-content:center;">
+        <div id="am-modal-box" style="background:var(--aged-parchment); border:2px solid var(--earth-brown); border-radius:6px; padding:24px; width:360px; max-width:90vw; font-size:0.9em;">
+            <div style="font-family:'Cinzel',serif; font-size:1em; font-weight:700; margin-bottom:14px;">Add / Restore Map</div>
+            <label style="display:block; margin-bottom:4px; font-size:0.85em;">Map title (e.g. "HD Roshar"):</label>
+            <input type="text" id="am-name" style="width:100%; box-sizing:border-box; padding:5px 8px; margin-bottom:12px; font-family:inherit; font-size:0.88em; border:1px solid var(--earth-brown); border-radius:3px; background:var(--aged-parchment);" placeholder="Map name…">
+            <label style="display:block; margin-bottom:4px; font-size:0.85em;">Map image file:</label>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+                <button class="btn secondary" id="am-choose-btn" style="font-size:0.82em;">Choose image…</button>
+                <span id="am-filename" style="font-size:0.82em; font-style:italic; color:var(--earth-brown);">No file chosen</span>
+            </div>
+            <input type="file" id="am-file-input" accept="image/*" style="display:none">
+            <div id="am-status" style="font-size:0.82em; font-style:italic; color:var(--earth-brown); min-height:18px; margin-bottom:12px;"></div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn" id="am-save-btn" disabled>Upload &amp; add</button>
+                <button class="btn secondary" id="am-cancel-btn">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -192,7 +242,7 @@
     <script type="module">
         import { db, uploadartifact } from './firebase.js';
         import {
-            doc, getDoc, updateDoc
+            doc, getDoc, updateDoc, collection, getDocs
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         function getParam(name) {
@@ -242,8 +292,10 @@
         }
 
         function renderBookContent(book) {
-            const mapsCount = Array.isArray(book.maps) ? book.maps.length : 0;
-            const params    = `?u=${userid}&a=${author}&s=${series}&b=${bookid}`;
+            const mapsCount     = Array.isArray(book.maps) ? book.maps.length : 0;
+            const params        = `?u=${userid}&a=${author}&s=${series}&b=${bookid}`;
+            const seriesDisplay = book.series_label || book.series || '—';
+            const volDisplay    = book.volume_number ? `&nbsp;<span style="font-style:italic;opacity:0.65;">vol. ${book.volume_number}</span>` : '';
 
             document.getElementById('book-content').innerHTML = `
                 <div class="book-detail">
@@ -261,9 +313,37 @@
                     <div>
                         <ul class="meta-list">
                             <li><span class="label">author</span>${book.author || '—'}</li>
-                            <li><span class="label">series</span>${book.series || '—'}</li>
+                            <li><span class="label">series</span><span id="series-display">${seriesDisplay}</span>${volDisplay}</li>
                             <li><span class="label">maps</span>${mapsCount}</li>
                         </ul>
+
+                        <!-- ── Series editor ───────────────────────────────── -->
+                        <div class="series-editor">
+                            <div class="series-editor-title">series &amp; volume</div>
+                            <div class="series-row">
+                                <span class="label">series</span>
+                                <select id="series-select" class="btn secondary series-input" style="min-width:160px;">
+                                    <option value="">loading…</option>
+                                </select>
+                            </div>
+                            <div class="series-row" id="series-other-row" style="display:none;">
+                                <span class="label"></span>
+                                <input type="text" id="series-other-input" class="series-input"
+                                       placeholder="enter series name…" style="min-width:160px;">
+                            </div>
+                            <div class="series-row">
+                                <span class="label">volume</span>
+                                <input type="number" id="volume-input" class="series-input"
+                                       min="1" placeholder="—" style="width:60px;"
+                                       value="${book.volume_number || ''}">
+                            </div>
+                            <div class="series-row" style="margin-top:4px;">
+                                <span class="label"></span>
+                                <button id="series-save-btn" class="btn" style="font-size:0.82em; padding:5px 12px;">save</button>
+                                <span id="series-status" class="series-status"></span>
+                            </div>
+                        </div>
+
                         <div class="action-row">
                             <div class="action-cell">
                                 <a href="companion.html${params}" class="btn">accompany me</a>
@@ -272,12 +352,115 @@
                             <div class="action-cell">
                                 <a href="mapgen.html${params}" class="btn secondary">edit map overlay</a>
                             </div>
+                            <div class="action-cell">
+                                <button class="btn secondary" id="add-map-btn">add / restore map</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
 
             document.getElementById('change-cover-btn').onclick = openCoverModal;
+            document.getElementById('add-map-btn').onclick = openAddMapModal;
+            wireSeriesEditor(book);
+            populateSeriesDropdown(book);
+        }
+
+        // ── Series editor ─────────────────────────────────────────────────────
+        async function loadExistingSeries() {
+            try {
+                const labelsSet = new Set();
+                const authorsSnap = await getDocs(collection(db, 'users', userid, 'authors'));
+                for (const aDoc of authorsSnap.docs) {
+                    const serSnap = await getDocs(
+                        collection(db, 'users', userid, 'authors', aDoc.id, 'series')
+                    );
+                    for (const sDoc of serSnap.docs) {
+                        const bSnap = await getDocs(
+                            collection(db, 'users', userid, 'authors', aDoc.id, 'series', sDoc.id, 'books')
+                        );
+                        bSnap.docs.forEach(bDoc => {
+                            const lbl = bDoc.data().series_label;
+                            if (lbl && lbl !== 'Standalone') labelsSet.add(lbl);
+                        });
+                    }
+                }
+                return Array.from(labelsSet).sort();
+            } catch (e) {
+                console.warn('Could not load existing series:', e);
+                return [];
+            }
+        }
+
+        async function populateSeriesDropdown(book) {
+            const currentLabel = book.series_label || '';
+            const select       = document.getElementById('series-select');
+            const existingLabels = await loadExistingSeries();
+
+            // Build options: Standalone, then any existing named series, then Other…
+            const namedOptions = existingLabels.filter(l => l !== 'Standalone');
+            const allOptions   = ['Standalone', ...namedOptions, 'Other…'];
+
+            select.innerHTML = allOptions.map(opt =>
+                `<option value="${opt === 'Other…' ? '__other__' : opt}">${opt}</option>`
+            ).join('');
+
+            // Select the current value
+            if (!currentLabel || currentLabel === 'Standalone') {
+                select.value = 'Standalone';
+            } else if (namedOptions.includes(currentLabel)) {
+                select.value = currentLabel;
+            } else {
+                // Current label not in list — show Other with pre-filled text
+                select.value = '__other__';
+                document.getElementById('series-other-row').style.display = 'flex';
+                document.getElementById('series-other-input').value = currentLabel;
+            }
+        }
+
+        function wireSeriesEditor(book) {
+            const select    = document.getElementById('series-select');
+            const otherRow  = document.getElementById('series-other-row');
+            const otherInput= document.getElementById('series-other-input');
+            const saveBtn   = document.getElementById('series-save-btn');
+            const statusEl  = document.getElementById('series-status');
+
+            select.onchange = () => {
+                otherRow.style.display = select.value === '__other__' ? 'flex' : 'none';
+            };
+
+            saveBtn.onclick = async () => {
+                saveBtn.disabled = true;
+                statusEl.textContent = 'Saving…';
+                try {
+                    let newLabel = select.value === '__other__'
+                        ? (otherInput.value.trim() || 'Standalone')
+                        : select.value;
+                    const volRaw = document.getElementById('volume-input').value;
+                    const volNum = volRaw ? parseInt(volRaw) : null;
+
+                    const bookRef = doc(db, 'users', userid, 'authors', author, 'series', series, 'books', bookid);
+                    await updateDoc(bookRef, {
+                        series_label:  newLabel,
+                        volume_number: volNum
+                    });
+
+                    bookData.series_label  = newLabel;
+                    bookData.volume_number = volNum;
+
+                    // Update the visible series display
+                    const dispEl = document.getElementById('series-display');
+                    if (dispEl) dispEl.textContent = newLabel;
+
+                    statusEl.textContent = 'saved ✓';
+                    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+                } catch (err) {
+                    console.error(err);
+                    statusEl.textContent = 'error: ' + err.message;
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            };
         }
 
         // ── Cover modal ────────────────────────────────────────────────────────
@@ -288,21 +471,16 @@
             document.getElementById('cm-status').textContent = '';
             document.getElementById('cm-save-btn').disabled = true;
 
-            // Build thumbnail grid from all stored images (maps + alternates)
+            // Build thumbnail grid from previously saved cover image(s)
             const grid   = document.getElementById('cm-thumb-grid');
             const images = [];
 
-            if (bookData && Array.isArray(bookData.maps)) {
-                bookData.maps.forEach((m, mi) => {
-                    if (m.url) images.push({ url: m.url, label: m.name || `map ${mi + 1}` });
-                    (m.alternates || []).forEach((alt, ai) => {
-                        if (alt.url) images.push({ url: alt.url, label: alt.name || `alt ${ai + 1}` });
-                    });
-                });
+            if (bookData && bookData.cover) {
+                images.push({ url: bookData.cover, label: 'current cover' });
             }
 
             if (images.length === 0) {
-                grid.innerHTML = '<em style="font-size:0.82em; color:#888;">No stored images found — use upload below.</em>';
+                grid.innerHTML = '<em style="font-size:0.82em; color:#888;">No saved cover found — upload one below.</em>';
             } else {
                 grid.innerHTML = images.map((img, i) => `
                     <img class="cm-thumb" src="${img.url}" alt="${img.label}"
@@ -378,6 +556,79 @@
                 statusEl.textContent = 'Cover updated ✓';
                 setTimeout(closeCoverModal, 900);
 
+            } catch (err) {
+                console.error(err);
+                statusEl.textContent = 'Error: ' + err.message;
+                saveBtn.disabled = false;
+            }
+        };
+
+        // ── Add / restore map modal ───────────────────────────────────────────
+        let amFile = null;
+
+        function openAddMapModal() {
+            amFile = null;
+            document.getElementById('am-name').value     = '';
+            document.getElementById('am-filename').textContent = 'No file chosen';
+            document.getElementById('am-status').textContent   = '';
+            document.getElementById('am-save-btn').disabled    = true;
+            document.getElementById('am-modal-overlay').style.display = 'flex';
+        }
+        function closeAddMapModal() {
+            document.getElementById('am-modal-overlay').style.display = 'none';
+        }
+
+        document.getElementById('am-choose-btn').onclick = () => {
+            document.getElementById('am-file-input').click();
+        };
+        document.getElementById('am-file-input').onchange = function() {
+            const file = this.files[0];
+            if (!file) return;
+            amFile = file;
+            document.getElementById('am-filename').textContent = file.name;
+            document.getElementById('am-save-btn').disabled =
+                !document.getElementById('am-name').value.trim();
+        };
+        document.getElementById('am-name').oninput = function() {
+            document.getElementById('am-save-btn').disabled = !this.value.trim() || !amFile;
+        };
+        document.getElementById('am-cancel-btn').onclick = closeAddMapModal;
+
+        document.getElementById('am-save-btn').onclick = async () => {
+            const statusEl = document.getElementById('am-status');
+            const saveBtn  = document.getElementById('am-save-btn');
+            const mapName  = document.getElementById('am-name').value.trim();
+            if (!mapName || !amFile) return;
+            saveBtn.disabled = true;
+            try {
+                statusEl.textContent = 'Uploading map image…';
+                const filename    = amFile.name.replace(/\s+/g,'_').toLowerCase();
+                const storagePath = `users/${userid}/${author}/${series}/${bookid}/maps/${filename}`;
+                const url = await uploadartifact(storagePath, amFile);
+                if (!url) throw new Error('Upload returned no URL.');
+
+                statusEl.textContent = 'Saving to vault…';
+                const bookRef  = doc(db, 'users', userid, 'authors', author, 'series', series, 'books', bookid);
+                const bookSnap = await getDoc(bookRef);
+                const currentMaps = (bookSnap.exists() ? bookSnap.data().maps : null) || [];
+                currentMaps.push({
+                    name:       mapName,
+                    url:        url,
+                    source:     'upload',
+                    alternates: [],
+                    preferred:  'original'
+                });
+                await updateDoc(bookRef, { maps: currentMaps });
+
+                // Update local bookData so the maps count refreshes
+                bookData.maps = currentMaps;
+                statusEl.textContent = `Map "${mapName}" added ✓`;
+
+                // Refresh the maps count on screen
+                const metaMaps = document.querySelector('.meta-list li:nth-child(3)');
+                if (metaMaps) metaMaps.innerHTML = `<span class="label">maps</span>${currentMaps.length}`;
+
+                setTimeout(closeAddMapModal, 1200);
             } catch (err) {
                 console.error(err);
                 statusEl.textContent = 'Error: ' + err.message;

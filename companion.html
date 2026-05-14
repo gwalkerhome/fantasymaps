@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1.0 | companion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Spectral:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+        /* ── Top bar ─────────────────────────────────────────────────────── */
+        .top-bar {
+            position: fixed; top: 0; left: 0; right: 300px; z-index: 200;
+            background: var(--aged-parchment);
+            border-bottom: 2px solid var(--earth-brown);
+            padding: 7px 10px;
+            display: flex; gap: 8px; flex-wrap: wrap;
+            align-items: center;
+        }
+        .tool-group {
+            display: flex; align-items: center; gap: 5px;
+            border-right: 1px solid var(--earth-brown); padding-right: 8px;
+        }
+        .tool-group:last-child { border-right: none; }
+        .tool-group label { font-size: 0.78em; white-space: nowrap; }
+        .btn { padding: 4px 9px; font-size: 0.82em; }
+        .btn.active { background-color: var(--moss-green); outline: 2px solid var(--iron-ink); }
+        select.btn { font-family: inherit; cursor: pointer; }
+
+        #book-title-display {
+            font-family: 'Cinzel', serif;
+            font-size: 0.88em; font-weight: 700;
+            color: var(--earth-brown);
+            white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 240px;
+        }
+
+        /* small, unobtrusive toggle buttons for overlay/chars */
+        .minor-btn {
+            padding: 3px 7px; font-size: 0.72em;
+            opacity: 0.65;
+            border: 1px solid var(--earth-brown);
+            background: transparent; cursor: pointer;
+            font-family: 'Cinzel', serif;
+            color: var(--earth-brown);
+            border-radius: 2px;
+            transition: opacity 0.15s;
+        }
+        .minor-btn:hover   { opacity: 1; }
+        .minor-btn.active  { opacity: 1; background: var(--moss-green); color: white; border-color: var(--moss-green); }
+
+        /* ── Status bar ──────────────────────────────────────────────────── */
+        .status-bar {
+            position: fixed; left: 0; right: 300px; z-index: 199;
+            text-align: center; font-style: italic; font-size: 0.78em;
+            color: var(--iron-ink);
+            background: var(--aged-parchment);
+            border-bottom: 1px solid rgba(106,79,75,0.3);
+            padding: 4px 10px; min-height: 1.4em;
+        }
+
+        /* ── Map viewport ────────────────────────────────────────────────── */
+        #map-viewport {
+            position: fixed; left: 180px; right: 300px; bottom: 48px;
+            overflow: hidden; user-select: none;
+            background: #1e1e2e;
+            cursor: grab;
+        }
+        #map-wrapper   { position: absolute; transform-origin: 0 0; }
+        #map-content   {
+            position: relative; display: inline-block;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+            border: 3px solid var(--earth-brown);
+            line-height: 0;
+        }
+        #map-image     { display: block; -webkit-user-drag: none; }
+        .map-svg       { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+        /* ── Cartographer overlay styles ─────────────────────────────────── */
+        .poly-land      { fill: rgba(210,185,110,0.35); stroke: rgba(160,120,40,0.85);  stroke-width: 0.8; }
+        .poly-forest    { fill: rgba(50,120,50,0.35);   stroke: rgba(20,80,20,0.85);    stroke-width: 0.8; }
+        .poly-water     { fill: rgba(60,130,220,0.35);  stroke: rgba(20,70,180,0.85);   stroke-width: 0.8; }
+        .poly-mountains { fill: rgba(155,135,105,0.35); stroke: rgba(100,80,50,0.90);   stroke-width: 0.9; }
+        .path-road      { fill: none; stroke: rgba(180,110,30,0.95); stroke-width: 1.8;
+                          stroke-linejoin: round; stroke-linecap: round; }
+        .path-river     { fill: none; stroke: rgba(40,110,220,0.90); stroke-width: 1.8;
+                          stroke-linejoin: round; stroke-linecap: round; }
+        .pt-circle      { stroke: white; stroke-width: 0.6; fill: rgba(210,40,40,0.90); }
+        .pt-settlement  { fill: rgba(210,40,40,0.90); }
+        .pt-castle      { fill: rgba(60,80,160,0.90); }
+        .pt-ruin        { fill: rgba(110,85,60,0.90); }
+        .pt-landmark    { fill: rgba(130,50,170,0.90); }
+        .pt-mine        { fill: rgba(60,55,50,0.90); }
+        .pt-label       { font-size: 2.2px; fill: rgba(180,20,20,0.95);
+                          stroke: white; stroke-width: 0.4; paint-order: stroke; }
+
+        /* ── Layer visibility toggle ─────────────────────────────────────── */
+        .layer-hidden { visibility: hidden; }
+
+        /* ── Left sidebar — chapter character list ───────────────────────── */
+        #chapter-sidebar {
+            position: fixed; left: 0; z-index: 150;
+            width: 180px;
+            background: var(--aged-parchment);
+            border-right: 2px solid var(--earth-brown);
+            overflow-y: auto;
+            display: flex; flex-direction: column;
+        }
+        #chapter-sidebar-title {
+            font-family: 'Cinzel', serif; font-size: 0.68em; font-weight: 700;
+            color: var(--earth-brown); text-transform: uppercase; letter-spacing: 0.07em;
+            padding: 9px 10px 6px;
+            border-bottom: 1px solid rgba(106,79,75,0.3);
+            background: rgba(0,0,0,0.03);
+            line-height: 1.35;
+        }
+        #chapter-sidebar-sub {
+            font-size: 0.72em; font-style: italic; color: var(--earth-brown);
+            opacity: 0.75; padding: 4px 10px 6px;
+            border-bottom: 1px solid rgba(106,79,75,0.15);
+        }
+
+        /* ── Character rows ──────────────────────────────────────────────── */
+        .ch-char-row {
+            display: flex; align-items: flex-start; gap: 5px;
+            padding: 6px 8px 5px;
+            border-bottom: 1px solid rgba(106,79,75,0.1);
+        }
+        .char-swatch {
+            width: 10px; height: 10px; border-radius: 50%;
+            flex-shrink: 0; border: 1px solid rgba(0,0,0,0.2);
+            margin-top: 3px;
+        }
+        .ch-char-info {
+            flex: 1; min-width: 0;
+        }
+        .ch-char-name {
+            font-weight: bold; font-size: 0.82em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ch-char-role {
+            font-size: 0.70em; font-style: italic; color: #666; margin-top: 1px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .pin-toggle {
+            flex-shrink: 0;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(106,79,75,0.4);
+            background: transparent; cursor: pointer;
+            font-size: 0.7em; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+            color: rgba(106,79,75,0.5);
+            transition: all 0.15s;
+            padding: 0;
+        }
+        .pin-toggle:hover { border-color: var(--earth-brown); color: var(--earth-brown); }
+        .pin-toggle.on {
+            background: var(--moss-green);
+            border-color: var(--moss-green);
+            color: white;
+        }
+        .pin-toggle.loading {
+            background: rgba(200,170,80,0.3);
+            border-color: rgba(200,170,80,0.6);
+            cursor: wait;
+        }
+
+        /* ── Section divider inside sidebar ─────────────────────────────── */
+        .sidebar-section-label {
+            font-family: 'Cinzel', serif; font-size: 0.62em; font-weight: 700;
+            color: var(--earth-brown); text-transform: uppercase; letter-spacing: 0.08em;
+            padding: 7px 10px 4px;
+            border-bottom: 1px solid rgba(106,79,75,0.2);
+            background: rgba(0,0,0,0.03);
+        }
+
+        /* ── Group rows ──────────────────────────────────────────────────── */
+        .ch-group-row {
+            display: flex; align-items: center; gap: 5px;
+            padding: 5px 8px;
+            border-bottom: 1px solid rgba(106,79,75,0.1);
+        }
+        .ch-group-icon {
+            width: 10px; height: 10px; border-radius: 2px;
+            flex-shrink: 0; border: 1px solid rgba(0,0,0,0.2);
+            margin-top: 1px;
+        }
+        .ch-group-info { flex: 1; min-width: 0; }
+        .ch-group-name {
+            font-weight: bold; font-size: 0.80em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ch-group-members {
+            font-size: 0.68em; color: #888; font-style: italic; margin-top: 1px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* ── Chapter strip (bottom bar) ──────────────────────────────────── */
+        #chapter-strip {
+            position: fixed; left: 0; right: 300px; bottom: 0; z-index: 200;
+            height: 48px;
+            background: var(--aged-parchment);
+            border-top: 2px solid var(--earth-brown);
+            display: flex; align-items: center;
+            padding: 0 10px; gap: 5px;
+            overflow-x: auto;
+        }
+        #chapter-strip::-webkit-scrollbar { height: 4px; }
+        #chapter-strip::-webkit-scrollbar-thumb { background: rgba(106,79,75,0.35); border-radius: 2px; }
+        #chapter-strip-label {
+            font-family: 'Cinzel', serif; font-size: 0.68em; font-weight: 700;
+            color: var(--earth-brown); text-transform: uppercase; letter-spacing: 0.07em;
+            flex-shrink: 0; padding-right: 10px;
+            border-right: 1px solid rgba(106,79,75,0.3); margin-right: 4px;
+        }
+        .ch-btn {
+            padding: 4px 10px; font-size: 0.76em; white-space: nowrap;
+            flex-shrink: 0; cursor: pointer; font-family: 'Cinzel', serif;
+        }
+        .ch-btn.active {
+            background-color: var(--moss-green);
+            outline: 2px solid var(--iron-ink);
+        }
+
+        /* ── Right sidebar ───────────────────────────────────────────────── */
+        #right-sidebar {
+            position: fixed; top: 0; right: 0;
+            width: 300px; height: 100vh;
+            background: var(--aged-parchment);
+            border-left: 2px solid var(--earth-brown);
+            z-index: 300;
+            overflow-y: auto;
+            display: flex; flex-direction: column;
+        }
+
+        /* ── Glow layer ──────────────────────────────────────────────────── */
+        @keyframes chapter-glow {
+            0%, 100% { fill-opacity: 0.10; stroke-opacity: 0.50; }
+            50%       { fill-opacity: 0.38; stroke-opacity: 1.00; }
+        }
+        .glow-polygon {
+            fill: rgba(255,220,50,0.18); stroke: rgba(255,175,0,0.8); stroke-width: 1.5;
+            animation: chapter-glow 2.2s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .glow-circle {
+            fill: rgba(255,220,50,0.15); stroke: rgba(255,175,0,0.75); stroke-width: 1.2;
+            animation: chapter-glow 2.2s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        /* ── Character memory card ───────────────────────────────────────── */
+        #char-card-placeholder {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+            color: rgba(106,79,75,0.35);
+            font-family: 'Cinzel', serif;
+            font-size: 0.70em;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            line-height: 2;
+        }
+        #char-card-loading {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+        .card-spinner {
+            font-family: 'Cinzel', serif;
+            font-size: 0.75em;
+            color: var(--earth-brown);
+            font-style: italic;
+            line-height: 2.2;
+        }
+        #char-card-content {
+            display: none;
+            padding: 16px 14px;
+            flex-direction: column;
+        }
+        .card-name {
+            font-family: 'Cinzel', serif;
+            font-size: 0.96em; font-weight: 700;
+            color: var(--earth-brown);
+            margin-bottom: 2px; line-height: 1.25;
+        }
+        .card-role {
+            font-size: 0.78em; font-style: italic;
+            color: var(--earth-brown); opacity: 0.8;
+            margin-bottom: 10px; line-height: 1.4;
+        }
+        .card-section-label {
+            font-family: 'Cinzel', serif;
+            font-size: 0.62em; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--earth-brown); opacity: 0.7;
+            margin: 12px 0 5px;
+            border-bottom: 1px solid rgba(106,79,75,0.2);
+            padding-bottom: 3px;
+        }
+        .card-who {
+            font-size: 0.82em; line-height: 1.55;
+            color: var(--iron-ink);
+        }
+        .card-facts {
+            margin: 4px 0 0 0; padding: 0 0 0 14px;
+        }
+        .card-facts li {
+            font-size: 0.80em; line-height: 1.5;
+            color: var(--iron-ink); margin-bottom: 4px;
+        }
+        .card-appearances {
+            font-size: 0.70em; font-style: italic;
+            color: var(--earth-brown); opacity: 0.65;
+            margin-top: 14px; padding-top: 10px;
+            border-top: 1px solid rgba(106,79,75,0.15);
+        }
+        .card-close-btn {
+            font-size: 0.72em; padding: 3px 8px;
+            margin-top: 14px; width: 100%;
+        }
+        /* Avatar circle */
+        .card-avatar {
+            width: 64px; height: 64px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 12px;
+            font-family: 'Cinzel', serif; font-size: 1.3em; font-weight: 700;
+            color: white; letter-spacing: 0.02em;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+            flex-shrink: 0;
+        }
+        .card-avatar.creature { border-radius: 8px; }
+        /* Physical description */
+        .card-description {
+            font-size: 0.74em; font-style: italic;
+            color: var(--earth-brown); opacity: 0.75;
+            margin-bottom: 10px; line-height: 1.4;
+            border-left: 2px solid rgba(106,79,75,0.25);
+            padding-left: 8px;
+        }
+        /* Relationships */
+        .card-rel-row {
+            display: flex; gap: 5px; align-items: baseline;
+            font-size: 0.78em; line-height: 1.5; margin-bottom: 2px;
+        }
+        .card-rel-label {
+            font-family: 'Cinzel', serif; font-size: 0.68em; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--earth-brown); opacity: 0.65;
+            flex-shrink: 0; min-width: 48px;
+        }
+        .card-rel-names { color: var(--iron-ink); }
+        /* Clickable character name area */
+        .ch-char-info { cursor: pointer; }
+        .ch-char-info:hover .ch-char-name {
+            text-decoration: underline; color: var(--earth-brown);
+        }
+        .ch-group-info { cursor: pointer; }
+        .ch-group-info:hover .ch-group-name {
+            text-decoration: underline; color: var(--earth-brown);
+        }
+
+        /* ── No-map placeholder ──────────────────────────────────────────── */
+        #map-placeholder {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Cinzel', serif; font-size: 0.85em;
+            color: rgba(200,190,175,0.5);
+            letter-spacing: 0.08em;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Top bar ──────────────────────────────────────────────────────── -->
+    <div class="top-bar" id="top-bar">
+        <div class="tool-group">
+            <a id="back-btn" href="index.html" class="btn secondary">← back</a>
+        </div>
+        <div class="tool-group" style="flex:1; min-width:0;">
+            <span id="book-title-display">loading…</span>
+        </div>
+        <div class="tool-group">
+            <label>Map:</label>
+            <select id="map-select" class="btn secondary">
+                <option value="">—</option>
+            </select>
+        </div>
+        <div class="tool-group" style="gap:4px;">
+            <button id="toggle-overlay-btn" class="minor-btn" title="show / hide cartographer overlay">overlay</button>
+            <button id="toggle-chars-btn"   class="minor-btn" title="show / hide all character pins">all pins</button>
+        </div>
+        <div class="tool-group">
+            <button id="fit-btn" class="btn secondary" title="fit map to screen">⊡</button>
+        </div>
+    </div>
+
+    <!-- ── Status bar ────────────────────────────────────────────────────── -->
+    <div class="status-bar" id="status-bar">Loading tome…</div>
+
+    <!-- ── Map viewport ──────────────────────────────────────────────────── -->
+    <div id="map-viewport">
+        <div id="map-placeholder">select a map above</div>
+        <div id="map-wrapper">
+            <div id="map-content">
+                <img id="map-image" src="" alt="" draggable="false">
+
+                <svg id="glow-svg" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <g id="glow-layer"></g>
+                </svg>
+
+                <svg id="overlay-svg" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <g id="polygon-layer"></g>
+                    <g id="path-layer"></g>
+                    <g id="point-layer"></g>
+                </svg>
+
+                <svg id="character-svg" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <g id="character-layer"></g>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Left sidebar — chapter character list ─────────────────────────── -->
+    <div id="chapter-sidebar">
+        <div id="chapter-sidebar-title">Select a chapter</div>
+        <div id="chapter-sidebar-sub">Use the strip below</div>
+        <div id="chapter-char-list">
+            <div style="padding:10px; font-size:0.78em; font-style:italic; color:#888;">
+                Click a chapter button to see who appears in it.
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Chapter strip (bottom) ────────────────────────────────────────── -->
+    <div id="chapter-strip">
+        <span id="chapter-strip-label">Chapters</span>
+        <div id="chapter-btns" style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
+            <span style="font-size:0.8em; font-style:italic; opacity:0.6;">Loading…</span>
+        </div>
+    </div>
+
+    <!-- ── Right sidebar — character memory card ────────────────────────── -->
+    <div id="right-sidebar">
+
+        <div id="char-card-placeholder">
+            Click a character<br>name to reveal<br>who they are
+        </div>
+
+        <div id="char-card-loading">
+            <div class="card-spinner" id="card-spinner-text">
+                Consulting the chronicles…
+            </div>
+        </div>
+
+        <div id="char-card-content">
+            <div class="card-avatar"      id="card-avatar"></div>
+            <div class="card-name"        id="card-name"></div>
+            <div class="card-role"        id="card-role"></div>
+            <div class="card-description" id="card-description"></div>
+            <div class="card-section-label">Who Are They</div>
+            <div class="card-who"         id="card-who"></div>
+            <div class="card-section-label" id="card-rel-heading" style="display:none">Relationships</div>
+            <div id="card-relationships"></div>
+            <div class="card-section-label">Story So Far</div>
+            <ul  class="card-facts"       id="card-facts"></ul>
+            <div class="card-appearances" id="card-appearances"></div>
+            <button class="btn secondary card-close-btn" id="card-close-btn">close</button>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { db } from './firebase.js';
+        import {
+            doc, getDoc, collection, getDocs
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // ── URL params ────────────────────────────────────────────────────
+        function getParam(name) {
+            return new URLSearchParams(window.location.search).get(name);
+        }
+        const userid = getParam('u') || 'default-user';
+        const author = getParam('a');
+        const series = getParam('s');
+        const bookid = getParam('b');
+
+        // Fix the back button to include book params
+        const backBtn = document.getElementById('back-btn');
+        if (author && series && bookid) {
+            backBtn.href = `mybook.html?u=${userid}&a=${author}&s=${series}&b=${bookid}`;
+        }
+
+        // ── Character colours ──────────────────────────────────────────────
+        const CHAR_COLOURS = [
+            '#ff7800', '#2266cc', '#22aa44', '#cc2222',
+            '#aa44cc', '#cc8800', '#006688', '#884400',
+            '#cc4488', '#448800', '#008866', '#664400'
+        ];
+
+        function colourForName(name) {
+            let h = 0;
+            for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+            return CHAR_COLOURS[h % CHAR_COLOURS.length];
+        }
+
+        // ── State ──────────────────────────────────────────────────────────
+        let bookData        = null;
+        let bookTitle       = '';
+        let bookAuthor      = '';
+        let currentMapIdx   = -1;
+        let currentVersionKey = 'original';
+        let mapLedger       = { polygons: [], paths: [], points: [] };
+        let overlayVisible  = false;   // overlay OFF by default
+        let charsVisible    = true;
+
+        let allChapters     = [];
+        let activeChapterNum = null;
+
+        // per-session coordinate cache: {chNum: {entityKey: {x, y}}}
+        let coordCache      = {};
+        // which pins are currently ON: Set of entityKeys
+        let activePinKeys   = new Set();
+        // scene anchor coords for the active chapter (derived from overlay glow)
+        let sceneAnchorCoords = null;
+
+        let scale = 1, panX = 0, panY = 0;
+        let isPanning = false, startMouseX = 0, startMouseY = 0;
+
+        // ── DOM refs ───────────────────────────────────────────────────────
+        const topBar      = document.getElementById('top-bar');
+        const statusEl    = document.getElementById('status-bar');
+        const mapSelect   = document.getElementById('map-select');
+        const mapViewport = document.getElementById('map-viewport');
+        const mapWrapper  = document.getElementById('map-wrapper');
+        const mapContent  = document.getElementById('map-content');
+        const mapImage    = document.getElementById('map-image');
+        const overlaySvg  = document.getElementById('overlay-svg');
+        const charSvg     = document.getElementById('character-svg');
+        const glowSvg     = document.getElementById('glow-svg');
+        const placeholder = document.getElementById('map-placeholder');
+
+        // ── Status helper ──────────────────────────────────────────────────
+        let statusTimer;
+        function setStatus(msg = '', duration = 0) {
+            statusEl.textContent = msg;
+            if (duration) {
+                clearTimeout(statusTimer);
+                statusTimer = setTimeout(() => { statusEl.textContent = ''; }, duration);
+            }
+        }
+
+        // ── Viewport layout ────────────────────────────────────────────────
+        function layoutViewport() {
+            const barH    = topBar.offsetHeight;
+            const statusH = statusEl.offsetHeight;
+            statusEl.style.top    = barH + 'px';
+            mapViewport.style.top = (barH + statusH) + 'px';
+            const chSidebar = document.getElementById('chapter-sidebar');
+            if (chSidebar) {
+                chSidebar.style.top    = (barH + statusH) + 'px';
+                chSidebar.style.bottom = '48px';
+            }
+        }
+
+        // ── Pan & Zoom ─────────────────────────────────────────────────────
+        function applyTransform() {
+            mapWrapper.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+        }
+
+        function fitMap() {
+            if (!mapImage.naturalWidth) return;
+            const vw = mapViewport.offsetWidth;
+            const vh = mapViewport.offsetHeight;
+            scale = Math.min(vw / mapImage.naturalWidth, vh / mapImage.naturalHeight) * 0.92;
+            panX  = (vw - mapImage.naturalWidth  * scale) / 2;
+            panY  = (vh - mapImage.naturalHeight * scale) / 2;
+            applyTransform();
+        }
+
+        mapViewport.addEventListener('wheel', e => {
+            e.preventDefault();
+            const rect  = mapViewport.getBoundingClientRect();
+            const mx    = e.clientX - rect.left;
+            const my    = e.clientY - rect.top;
+            const delta = e.deltaY < 0 ? 1.12 : 0.89;
+            panX  = mx - (mx - panX) * delta;
+            panY  = my - (my - panY) * delta;
+            scale *= delta;
+            applyTransform();
+        }, { passive: false });
+
+        mapViewport.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            isPanning   = true;
+            startMouseX = e.clientX - panX;
+            startMouseY = e.clientY - panY;
+            mapViewport.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (!isPanning) return;
+            panX = e.clientX - startMouseX;
+            panY = e.clientY - startMouseY;
+            applyTransform();
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPanning = false;
+            mapViewport.style.cursor = 'grab';
+        });
+
+        // ── SVG sizing ─────────────────────────────────────────────────────
+        function pinSvgsToImage() {
+            const w = mapImage.naturalWidth  + 'px';
+            const h = mapImage.naturalHeight + 'px';
+            glowSvg.style.width      = w; glowSvg.style.height      = h;
+            overlaySvg.style.width   = w; overlaySvg.style.height   = h;
+            charSvg.style.width      = w; charSvg.style.height      = h;
+        }
+
+        // ── Layer toggles ──────────────────────────────────────────────────
+        document.getElementById('toggle-overlay-btn').onclick = () => {
+            overlayVisible = !overlayVisible;
+            overlaySvg.classList.toggle('layer-hidden', !overlayVisible);
+            document.getElementById('toggle-overlay-btn').classList.toggle('active', overlayVisible);
+        };
+
+        document.getElementById('toggle-chars-btn').onclick = () => {
+            charsVisible = !charsVisible;
+            charSvg.classList.toggle('layer-hidden', !charsVisible);
+            document.getElementById('toggle-chars-btn').classList.toggle('active', charsVisible);
+        };
+
+        document.getElementById('fit-btn').onclick = fitMap;
+        window.addEventListener('resize', layoutViewport);
+
+        // ── Render cartographer overlay ────────────────────────────────────
+        function renderOverlay() {
+            document.getElementById('polygon-layer').innerHTML = '';
+            document.getElementById('path-layer').innerHTML    = '';
+            document.getElementById('point-layer').innerHTML   = '';
+
+            mapLedger.polygons.forEach(p => {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                el.setAttribute('points', p.coords.map(c => `${c.x},${c.y}`).join(' '));
+                el.classList.add(`poly-${p.type}`);
+                document.getElementById('polygon-layer').appendChild(el);
+            });
+
+            mapLedger.paths.forEach(p => {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+                el.setAttribute('points', p.coords.map(c => `${c.x},${c.y}`).join(' '));
+                el.classList.add(`path-${p.type}`);
+                document.getElementById('path-layer').appendChild(el);
+            });
+
+            mapLedger.points.forEach(p => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 1.4);
+                c.classList.add('pt-circle', `pt-${p.type}`);
+                const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                t.setAttribute('x', p.x); t.setAttribute('y', p.y + 3.2);
+                t.setAttribute('text-anchor', 'middle');
+                t.classList.add('pt-label');
+                t.textContent = p.name;
+                g.appendChild(c); g.appendChild(t);
+                document.getElementById('point-layer').appendChild(g);
+            });
+        }
+
+        // ── Load overlay from Firestore ────────────────────────────────────
+        async function loadOverlay(mapIdx, versionKey) {
+            mapLedger = { polygons: [], paths: [], points: [] };
+
+            // Key format matches what mapgen saves:
+            //   original → map_0   |   alt_0 → map_0_alt_0
+            const overlayKey = versionKey === 'original'
+                ? `map_${mapIdx}`
+                : `map_${mapIdx}_${versionKey}`;
+
+            try {
+                const snap = await getDoc(doc(db,
+                    'users', userid,
+                    'authors', author,
+                    'series', series,
+                    'books', bookid,
+                    'overlays', overlayKey
+                ));
+
+                if (snap.exists()) {
+                    mapLedger = snap.data().ledger || { polygons: [], paths: [], points: [] };
+                    renderOverlay();
+                    const n = (mapLedger.polygons.length) + (mapLedger.paths.length) + (mapLedger.points.length);
+                    setStatus(`Overlay loaded — ${n} feature(s).`, 4000);
+                } else {
+                    setStatus('No overlay found for this map. AI placement will use text only.', 6000);
+                }
+            } catch (err) {
+                console.error('Overlay load error:', err);
+                setStatus('Error loading overlay: ' + err.message, 5000);
+            }
+        }
+
+        // ── Load a map ─────────────────────────────────────────────────────
+        function loadMap(mapIdx, versionKey) {
+            if (!bookData || !Array.isArray(bookData.maps)) return;
+            const mapObj = bookData.maps[mapIdx];
+            if (!mapObj) return;
+
+            let url = mapObj.url || '';
+            if (versionKey && versionKey !== 'original') {
+                const altNum = parseInt(versionKey.replace('alt_', ''));
+                if (!isNaN(altNum) && mapObj.alternates && mapObj.alternates[altNum]) {
+                    url = mapObj.alternates[altNum].url || url;
+                }
+            }
+
+            if (!url) { setStatus('No image URL for this map.', 4000); return; }
+
+            placeholder.style.display = 'none';
+            mapImage.src = '';
+
+            setStatus('Loading map…');
+
+            let handled = false;
+            const onLoaded = () => {
+                if (handled) return;
+                handled = true;
+                pinSvgsToImage();
+                fitMap();
+                // Overlay starts hidden
+                overlaySvg.classList.add('layer-hidden');
+                document.getElementById('toggle-overlay-btn').classList.remove('active');
+                // Load overlay data from Firestore
+                loadOverlay(mapIdx, versionKey);
+            };
+
+            mapImage.onload  = onLoaded;
+            mapImage.onerror = () => { setStatus('Could not load map image.', 4000); };
+            mapImage.src = url;
+            if (mapImage.complete && mapImage.naturalWidth > 0) onLoaded();
+        }
+
+        // ── Map dropdown change ────────────────────────────────────────────
+        mapSelect.onchange = () => {
+            if (!mapSelect.value) return;
+            const [idxStr, vKey] = mapSelect.value.split('|');
+            currentMapIdx     = parseInt(idxStr);
+            currentVersionKey = vKey || 'original';
+            // Clear all pins and caches when changing map
+            document.getElementById('character-layer').innerHTML = '';
+            document.getElementById('glow-layer').innerHTML = '';
+            activePinKeys.clear();
+            coordCache    = {};
+            activeChapterNum = null;
+            document.querySelectorAll('.ch-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.pin-toggle').forEach(b => {
+                b.classList.remove('on');
+                b.textContent = '○';
+            });
+            loadMap(currentMapIdx, currentVersionKey);
+        };
+
+        // ── Build overlay description for AI ───────────────────────────────
+        function buildOverlayDescription() {
+            const lines = [];
+            if (mapLedger.points && mapLedger.points.length > 0) {
+                lines.push('SETTLEMENTS & LANDMARKS:');
+                mapLedger.points.forEach(p => {
+                    lines.push(`  - "${p.name}" (${p.type}) at (${(+p.x).toFixed(1)}, ${(+p.y).toFixed(1)})`);
+                });
+            } else {
+                lines.push('SETTLEMENTS & LANDMARKS: none recorded on this map.');
+            }
+            if (mapLedger.polygons && mapLedger.polygons.length > 0) {
+                lines.push('\nREGIONS:');
+                mapLedger.polygons.filter(p => p.name).forEach(p => {
+                    lines.push(`  - "${p.name}" (${p.type})`);
+                });
+            }
+            if (mapLedger.paths && mapLedger.paths.length > 0) {
+                lines.push('\nROADS & RIVERS:');
+                mapLedger.paths.filter(p => p.name).forEach(p => {
+                    lines.push(`  - "${p.name}" (${p.type})`);
+                });
+            }
+            return lines.join('\n');
+        }
+
+        // ── AI call ────────────────────────────────────────────────────────
+        async function callAI(prompt) {
+            // Try OpenAI first, then Gemini
+            const openaiKey = localStorage.getItem('openai_key');
+            const geminiKey = localStorage.getItem('gemini_key');
+
+            if (openaiKey) {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openaiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        response_format: { type: 'json_object' },
+                        messages: [
+                            { role: 'system', content: prompt },
+                            { role: 'user',   content: 'Place the entity on the map.' }
+                        ]
+                    })
+                });
+                if (!res.ok) throw new Error(`OpenAI error ${res.status}`);
+                const data = await res.json();
+                return JSON.parse(data.choices[0].message.content);
+            }
+
+            if (geminiKey) {
+                const res = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt + '\n\nPlace the entity on the map.' }] }],
+                            generationConfig: { responseMimeType: 'application/json' }
+                        })
+                    }
+                );
+                if (!res.ok) throw new Error(`Gemini error ${res.status}`);
+                const data = await res.json();
+                return JSON.parse(data.candidates[0].content.parts[0].text);
+            }
+
+            throw new Error('No API key found. Please set one in API Settings.');
+        }
+
+        // ── Dominant scene location for a chapter ─────────────────────────
+        function getDominantLocation(chapter) {
+            const placed = (chapter.characters || []).filter(c =>
+                ['placed', 'travelling', 'vague'].includes(c.status) && c.location_description
+            );
+            if (!placed.length) return null;
+            const freq = {};
+            placed.forEach(c => {
+                const k = c.location_description.trim().toLowerCase();
+                freq[k] = (freq[k] || 0) + 1;
+            });
+            return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+        }
+
+        // ── Build placement prompt ─────────────────────────────────────────
+        function buildPlacementPrompt(entityName, locationDesc, sceneLocation) {
+            const bookCtx = bookTitle
+                ? `BOOK: "${bookTitle}"${bookAuthor ? ` by ${bookAuthor}` : ''}.\nYou may use your knowledge of this book's world and geography to inform placement.\n\n`
+                : '';
+            const coordHint = sceneAnchorCoords
+                ? ` The centre of this region on the map is approximately (${sceneAnchorCoords.x}, ${sceneAnchorCoords.y}) — place the character at or very close to these coordinates.`
+                : '';
+            const sceneCtx = sceneLocation
+                ? `SCENE ANCHOR — MANDATORY CONSTRAINT: "${sceneLocation}".${coordHint}
+This chapter takes place at or near this location. You MUST place this character at or within the scene anchor region on the map.
+The only exception is if the character's location description explicitly and unambiguously names a completely different location that is far from the scene anchor. Vague descriptions, sub-locations (rooms, corridors, camps), or relative directions do NOT override the scene anchor — resolve them within it.\n\n`
+                : '';
+
+            return `You are a cartographic positioning assistant for a fantasy map reader.
+
+${bookCtx}COORDINATE SYSTEM: (0,0) = TOP-LEFT, (100,100) = BOTTOM-RIGHT.
+
+${sceneCtx}MAP FEATURES:
+${buildOverlayDescription()}
+
+TASK: Place "${entityName}" whose location is described as: "${locationDesc}"
+
+RULES:
+1. Find the scene anchor location on the map first. Place the character there unless rule 2 applies.
+2. Only override the scene anchor if the location description names a clearly different, named place that is geographically far from the scene anchor.
+3. If the description names a room, camp, corridor, or sub-feature, resolve it to its containing settlement or region — which should be at or near the scene anchor.
+4. Use your knowledge of the book's world geography only to help resolve names to map features, not to second-guess the scene anchor.
+
+Return ONLY valid JSON:
+{"x": <0-100>, "y": <0-100>, "matched": "<feature name used>", "confidence": "<high|medium|low>"}`;
+        }
+
+        // ── Pin management ─────────────────────────────────────────────────
+        function pinId(key) {
+            return 'pin-' + key.replace(/[^a-zA-Z0-9]/g, '-');
+        }
+
+        function drawPin(key, x, y, colour, label) {
+            const layer = document.getElementById('character-layer');
+            // Remove existing pin for this key if any
+            const existing = document.getElementById(pinId(key));
+            if (existing) existing.remove();
+
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.id = pinId(key);
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', x);
+            circle.setAttribute('cy', y);
+            circle.setAttribute('r', 2.2);
+            circle.setAttribute('fill', colour);
+            circle.setAttribute('stroke', 'white');
+            circle.setAttribute('stroke-width', '0.6');
+
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', x);
+            text.setAttribute('y', parseFloat(y) + 5.2);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('font-size', '3');
+            text.setAttribute('font-weight', 'bold');
+            text.setAttribute('fill', colour);
+            text.setAttribute('stroke', 'white');
+            text.setAttribute('stroke-width', '0.4');
+            text.setAttribute('paint-order', 'stroke');
+            text.textContent = label;
+
+            g.appendChild(circle);
+            g.appendChild(text);
+            layer.appendChild(g);
+        }
+
+        function removePin(key) {
+            const el = document.getElementById(pinId(key));
+            if (el) el.remove();
+        }
+
+        // ── Toggle a single character pin ──────────────────────────────────
+        async function togglePin(btn, key, entityName, locationDesc, colour, isPlaceable) {
+            if (activePinKeys.has(key)) {
+                // Turn OFF
+                activePinKeys.delete(key);
+                removePin(key);
+                btn.classList.remove('on');
+                btn.textContent = '○';
+                return;
+            }
+
+            // Turn ON
+            if (!isPlaceable || !locationDesc) {
+                // Can't place — no location data
+                setStatus(`${entityName}: no map location available.`, 3000);
+                return;
+            }
+
+            if (!mapImage.src || !mapImage.naturalWidth) {
+                setStatus('Select a map first.', 3000);
+                return;
+            }
+
+            // Check coordinate cache — by character key first, then by shared location
+            const chNum  = activeChapterNum;
+            const locKey = 'loc:' + (locationDesc || '').trim().toLowerCase();
+
+            if (coordCache[chNum]?.[key]) {
+                const { x, y } = coordCache[chNum][key];
+                activePinKeys.add(key);
+                drawPin(key, x, y, colour, entityName);
+                btn.classList.add('on');
+                btn.textContent = '●';
+                return;
+            }
+
+            if (coordCache[chNum]?.[locKey]) {
+                // Another character already resolved this same location — reuse it
+                const { x, y } = coordCache[chNum][locKey];
+                if (!coordCache[chNum]) coordCache[chNum] = {};
+                coordCache[chNum][key] = { x, y };
+                activePinKeys.add(key);
+                drawPin(key, x, y, colour, entityName);
+                btn.classList.add('on');
+                btn.textContent = '●';
+                return;
+            }
+
+            // Call AI
+            btn.classList.add('loading');
+            btn.textContent = '…';
+            setStatus(`Locating ${entityName}…`);
+
+            try {
+                const activeChapter = allChapters.find(c => c.num === activeChapterNum);
+                const sceneLocation = activeChapter ? getDominantLocation(activeChapter) : null;
+                const result = await callAI(buildPlacementPrompt(entityName, locationDesc, sceneLocation));
+                const x = parseFloat(result.x);
+                const y = parseFloat(result.y);
+
+                if (isNaN(x) || isNaN(y)) throw new Error('AI returned invalid coordinates.');
+
+                // Cache by both character key and location string
+                if (!coordCache[chNum]) coordCache[chNum] = {};
+                coordCache[chNum][key]    = { x, y };
+                coordCache[chNum][locKey] = { x, y };
+
+                activePinKeys.add(key);
+                drawPin(key, x, y, colour, entityName);
+                btn.classList.remove('loading');
+                btn.classList.add('on');
+                btn.textContent = '●';
+                setStatus('', 0);
+
+            } catch (err) {
+                console.error(err);
+                btn.classList.remove('loading');
+                btn.textContent = '○';
+                setStatus(`Could not place ${entityName}: ${err.message}`, 4000);
+            }
+        }
+
+        // ── Render left sidebar for a chapter ─────────────────────────────
+        const PLACEABLE_STATUSES = new Set(['placed', 'travelling', 'vague', 'group_implied']);
+
+        function renderChapterSidebar(chapter) {
+            document.getElementById('chapter-sidebar-title').textContent =
+                chapter.title || `Chapter ${chapter.num}`;
+
+            const chars = chapter.characters || [];
+
+            document.getElementById('chapter-sidebar-sub').textContent =
+                chars.length
+                    ? `${chars.length} character${chars.length !== 1 ? 's' : ''}`
+                    : 'No data in vault';
+
+            // Separate solo characters and grouped characters
+            const soloChars = chars.filter(c => !c.group_name);
+            const groupMap  = {};
+            chars.filter(c => c.group_name).forEach(c => {
+                if (!groupMap[c.group_name]) groupMap[c.group_name] = [];
+                groupMap[c.group_name].push(c);
+            });
+            const groupNames = Object.keys(groupMap);
+
+            const list = document.getElementById('chapter-char-list');
+
+            if (!chars.length) {
+                list.innerHTML =
+                    '<div style="padding:10px;font-size:0.78em;font-style:italic;color:#888;">' +
+                    'No characters saved for this chapter.' +
+                    '</div>';
+                return;
+            }
+
+            let html = '';
+
+            // ── Solo characters ──
+            if (soloChars.length) {
+                soloChars.forEach(c => {
+                    const colour      = colourForName(c.name);
+                    const role        = c.role || c.title || c.notes || '';
+                    const isPlaceable = PLACEABLE_STATUSES.has(c.status);
+                    const key         = 'char-' + c.name;
+                    const pinTitle    = isPlaceable
+                        ? 'Show/hide position on map'
+                        : 'No map location available';
+
+                    html += `
+                    <div class="ch-char-row">
+                        <span class="char-swatch" style="background:${colour}"></span>
+                        <div class="ch-char-info" data-charname="${c.name}" title="Click for character summary">
+                            <div class="ch-char-name">${c.name}</div>
+                            ${role ? `<div class="ch-char-role">${role}</div>` : ''}
+                        </div>
+                        <button class="pin-toggle"
+                                data-key="${key}"
+                                data-name="${c.name}"
+                                data-loc="${(c.location_description || '').replace(/"/g, '&quot;')}"
+                                data-colour="${colour}"
+                                data-placeable="${isPlaceable}"
+                                title="${pinTitle}">○</button>
+                    </div>`;
+                });
+            }
+
+            // ── Groups ──
+            if (groupNames.length) {
+                html += `<div class="sidebar-section-label">Groups</div>`;
+                groupNames.forEach(gName => {
+                    const members    = groupMap[gName];
+                    const rep        = members[0];
+                    const colour     = colourForName(gName);
+                    const memberStr  = members.map(m => m.name).join(', ');
+                    const isPlaceable = members.some(m => PLACEABLE_STATUSES.has(m.status));
+                    const locDesc    = rep.location_description || '';
+                    const key        = 'group-' + gName;
+                    const pinTitle   = isPlaceable
+                        ? 'Show/hide group position on map'
+                        : 'No map location available';
+
+                    html += `
+                    <div class="ch-group-row">
+                        <span class="ch-group-icon" style="background:${colour}"></span>
+                        <div class="ch-group-info" data-charname="${gName}" title="Click for group summary">
+                            <div class="ch-group-name">${gName}</div>
+                            <div class="ch-group-members">${memberStr}</div>
+                        </div>
+                        <button class="pin-toggle"
+                                data-key="${key}"
+                                data-name="${gName}"
+                                data-loc="${locDesc.replace(/"/g, '&quot;')}"
+                                data-colour="${colour}"
+                                data-placeable="${isPlaceable}"
+                                title="${pinTitle}">○</button>
+                    </div>`;
+                });
+            }
+
+            list.innerHTML = html;
+
+            // Wire up toggle buttons
+            list.querySelectorAll('.pin-toggle').forEach(btn => {
+                btn.onclick = () => {
+                    const key       = btn.dataset.key;
+                    const name      = btn.dataset.name;
+                    const loc       = btn.dataset.loc;
+                    const colour    = btn.dataset.colour;
+                    const placeable = btn.dataset.placeable === 'true';
+                    togglePin(btn, key, name, loc, colour, placeable);
+                };
+            });
+
+            // Wire up character name clicks to show memory card
+            list.querySelectorAll('.ch-char-info').forEach(info => {
+                info.onclick = () => showCharacterCard(info.dataset.charname);
+            });
+            list.querySelectorAll('.ch-group-info').forEach(info => {
+                info.onclick = () => showCharacterCard(info.dataset.charname);
+            });
+        }
+
+        // ── Chapter button clicked ─────────────────────────────────────────
+        function onChapterClick(chNum) {
+            activeChapterNum = chNum;
+
+            document.querySelectorAll('.ch-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.num) === chNum);
+            });
+
+            // Clear all active pins and reset card panel
+            activePinKeys.forEach(key => removePin(key));
+            activePinKeys.clear();
+            document.getElementById('glow-layer').innerHTML = '';
+            showCardPanel('placeholder');
+
+            const chapter = allChapters.find(c => c.num === chNum);
+            if (!chapter) return;
+
+            renderChapterSidebar(chapter);
+            glowChapterRegion(chapter);
+
+            // Show dominant scene location in sidebar sub-heading
+            const sceneLoc = getDominantLocation(chapter);
+            const subEl = document.getElementById('chapter-sidebar-sub');
+            const chars = chapter.characters || [];
+            const countStr = chars.length
+                ? `${chars.length} character${chars.length !== 1 ? 's' : ''}`
+                : 'No data in vault';
+            subEl.textContent = sceneLoc
+                ? `${countStr} · ${sceneLoc}`
+                : countStr;
+        }
+
+        // ── Polygon centroid ───────────────────────────────────────────────
+        function polygonCentroid(coords) {
+            const n = coords.length;
+            if (!n) return null;
+            const x = coords.reduce((s, c) => s + c.x, 0) / n;
+            const y = coords.reduce((s, c) => s + c.y, 0) / n;
+            return { x: parseFloat(x.toFixed(2)), y: parseFloat(y.toFixed(2)) };
+        }
+
+        // ── Glow region for chapter ────────────────────────────────────────
+        function glowChapterRegion(chapter) {
+            const glowLayer = document.getElementById('glow-layer');
+            glowLayer.innerHTML = '';
+            sceneAnchorCoords = null;   // reset
+            if (!mapLedger) return;
+
+            const placed = (chapter.characters || []).filter(c =>
+                ['placed', 'travelling', 'vague'].includes(c.status) && c.location_description
+            );
+            if (!placed.length) return;
+
+            const locations = placed.map(c => c.location_description.toLowerCase());
+
+            let bestPolygon = null, bestScore = 0;
+            (mapLedger.polygons || []).filter(p => p.name).forEach(poly => {
+                const words = poly.name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+                const score = locations.reduce((sum, loc) =>
+                    sum + words.filter(w => loc.includes(w)).length, 0);
+                if (score > bestScore) { bestScore = score; bestPolygon = poly; }
+            });
+
+            if (bestPolygon && bestScore > 0) {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                el.setAttribute('points', bestPolygon.coords.map(c => `${c.x},${c.y}`).join(' '));
+                el.classList.add('glow-polygon');
+                glowLayer.appendChild(el);
+                // Store centroid so placement AI gets exact coordinates
+                sceneAnchorCoords = polygonCentroid(bestPolygon.coords);
+                return;
+            }
+
+            let bestPoint = null; bestScore = 0;
+            (mapLedger.points || []).forEach(pt => {
+                const words = (pt.name || '').toLowerCase().split(/\s+/).filter(w => w.length > 2);
+                const score = locations.reduce((sum, loc) =>
+                    sum + words.filter(w => loc.includes(w)).length, 0);
+                if (score > bestScore) { bestScore = score; bestPoint = pt; }
+            });
+
+            if (bestPoint && bestScore > 0) {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                el.setAttribute('cx', bestPoint.x);
+                el.setAttribute('cy', bestPoint.y);
+                el.setAttribute('r', '10');
+                el.classList.add('glow-circle');
+                glowLayer.appendChild(el);
+                // Store point coords as scene anchor
+                sceneAnchorCoords = { x: parseFloat(bestPoint.x), y: parseFloat(bestPoint.y) };
+            }
+        }
+
+        // ── Build chapter strip ────────────────────────────────────────────
+        function buildChapterStrip() {
+            const container = document.getElementById('chapter-btns');
+            if (!allChapters.length) {
+                container.innerHTML =
+                    '<span style="font-size:0.8em;font-style:italic;opacity:0.6;">No chapter data — run the Scribe first</span>';
+                return;
+            }
+            container.innerHTML = allChapters.map((ch, idx) => {
+                const label = `Ch ${idx + 1}`;
+                return `<button class="ch-btn btn secondary" data-num="${ch.num}" title="${ch.title || ''}">${label}</button>`;
+            }).join('');
+            container.querySelectorAll('.ch-btn').forEach(btn => {
+                btn.onclick = () => onChapterClick(parseInt(btn.dataset.num));
+            });
+        }
+
+        // ── Load chapters from Firestore ───────────────────────────────────
+        async function loadChapters() {
+            try {
+                const snap = await getDocs(
+                    collection(db, 'users', userid, 'authors', author,
+                        'series', series, 'books', bookid, 'chapters')
+                );
+                allChapters = snap.docs
+                    .map(d => d.data())
+                    .filter(ch => Array.isArray(ch.characters) && ch.characters.length > 0)
+                    .sort((a, b) => (a.num || 0) - (b.num || 0));
+                buildChapterStrip();
+            } catch (err) {
+                console.warn('Could not load chapters:', err);
+                document.getElementById('chapter-btns').innerHTML =
+                    '<span style="font-size:0.8em;font-style:italic;color:#a02020;">Error loading chapters</span>';
+            }
+        }
+
+        // ── Populate map dropdown ──────────────────────────────────────────
+        function buildMapSelect() {
+            if (!bookData || !Array.isArray(bookData.maps) || !bookData.maps.length) {
+                mapSelect.innerHTML = '<option value="">no maps</option>';
+                return;
+            }
+
+            const options = [];
+            bookData.maps.forEach((m, i) => {
+                const name = m.name || `Map ${i + 1}`;
+                options.push(`<option value="${i}|original">${name}</option>`);
+                if (Array.isArray(m.alternates)) {
+                    m.alternates.forEach((alt, ai) => {
+                        const altName = alt.name || `${name} — alt ${ai + 1}`;
+                        options.push(`<option value="${i}|alt_${ai}">&nbsp;&nbsp;↳ ${altName}</option>`);
+                    });
+                }
+            });
+
+            mapSelect.innerHTML = '<option value="">— select map —</option>' + options.join('');
+        }
+
+        // ── Load book from Firestore and initialise ────────────────────────
+        async function init() {
+            if (!author || !series || !bookid) {
+                document.getElementById('book-title-display').textContent = 'missing parameters';
+                setStatus('This page needs u, a, s and b URL parameters.');
+                return;
+            }
+
+            try {
+                const bookRef = doc(db, 'users', userid, 'authors', author,
+                    'series', series, 'books', bookid);
+                const snap = await getDoc(bookRef);
+
+                if (!snap.exists()) {
+                    document.getElementById('book-title-display').textContent = 'tome not found';
+                    setStatus('No book found for these parameters.');
+                    return;
+                }
+
+                bookData   = snap.data();
+                bookTitle  = bookData.title  || bookid;
+                bookAuthor = bookData.author || '';
+                document.getElementById('book-title-display').textContent = bookTitle;
+                document.title = `v1.0 | ${bookTitle} — companion`;
+
+                buildMapSelect();
+                await loadChapters();
+
+                setStatus('Select a map and chapter to begin.', 0);
+                layoutViewport();
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('book-title-display').textContent = 'error';
+                setStatus('Error loading book: ' + err.message);
+            }
+        }
+
+        // ── Character memory card ──────────────────────────────────────────
+
+        const CARD_QUIPS = [
+            'Consulting the chronicles…',
+            'Leafing through the annals…',
+            'Rifling through the vault…',
+            'Recalling past deeds…',
+            'Dusting off the old records…',
+        ];
+
+        function cardCacheKey(charName) {
+            const maxCh = activeChapterNum !== null ? activeChapterNum - 1 : 0;
+            return `companion_card_${bookid}_${charName}_ch${maxCh}`;
+        }
+
+        function showCardPanel(which) {
+            document.getElementById('char-card-placeholder').style.display =
+                which === 'placeholder' ? 'flex' : 'none';
+            document.getElementById('char-card-loading').style.display =
+                which === 'loading'     ? 'flex' : 'none';
+            document.getElementById('char-card-content').style.display =
+                which === 'content'     ? 'flex' : 'none';
+        }
+
+        function buildCardPrompt(charName, appearances, maxChapter) {
+            const bookCtx = bookTitle
+                ? `BOOK: "${bookTitle}"${bookAuthor ? ` by ${bookAuthor}` : ''}.`
+                : 'BOOK: unknown.';
+
+            const appearanceLines = appearances.length
+                ? appearances.map(a => {
+                    const ch = allChapters.find(c => c.num === a.chNum);
+                    const chTitle = ch ? (ch.title || `Chapter ${a.chNum}`) : `Chapter ${a.chNum}`;
+                    return `  Ch ${a.chNum} "${chTitle}": at "${a.location || 'unknown location'}", status: ${a.status}${a.notes ? `, notes: ${a.notes}` : ''}`;
+                  }).join('\n')
+                : '  (no tracked appearances yet)';
+
+            return `You are a reading companion assistant for someone who has memory difficulties following a stroke. Your role is to give warm, helpful memory-aid summaries.
+
+${bookCtx}
+CURRENT CHAPTER: ${maxChapter !== null ? maxChapter : 'unknown'}
+
+CRITICAL SPOILER RULE: You have knowledge of this entire book and series from your training data. You MUST only describe events and information that occur in chapters UP TO AND INCLUDING chapter ${maxChapter}. Treat everything after chapter ${maxChapter} as completely unknown. Do not hint at, foreshadow, or reference future events in any way.
+
+CHARACTER: ${charName}
+
+TRACKED APPEARANCES IN THIS BOOK SO FAR:
+${appearanceLines}
+
+Using your knowledge of the book (limited strictly to chapter ${maxChapter} and earlier), provide a memory-aid card for this character.
+
+Return ONLY valid JSON — no markdown, no extra text:
+{
+  "type": "<one of: warrior, noble, scholar, mage, civilian, creature, unknown>",
+  "role": "<brief role or title — e.g. 'young slave-soldier', 'King of Alethkar', 'mysterious spren' — one short phrase>",
+  "description": "<brief physical description to help visualise them — hair, build, notable features — one sentence>",
+  "who": "<one or two plain-English sentences: who are they and why do they matter to the story so far>",
+  "facts": ["<the most memorable thing they have done so far>", "<second key fact>", "<third key fact if warranted>"],
+  "allied_with": ["<name of key ally or companion>"],
+  "opposed_to": ["<name of key rival, enemy, or antagonist — only if clearly established>"]
+}
+
+Keep facts to a maximum of 3. allied_with and opposed_to should each have at most 2–3 names, or be empty arrays if not clearly established. Write for someone who just wants a quick, friendly reminder.`;
+        }
+
+        async function showCharacterCard(charName) {
+            showCardPanel('loading');
+            // Rotate spinner quip
+            const quip = CARD_QUIPS[Math.floor(Math.random() * CARD_QUIPS.length)];
+            document.getElementById('card-spinner-text').textContent = quip;
+
+            // Check cache
+            const cKey = cardCacheKey(charName);
+            const cached = localStorage.getItem(cKey);
+            if (cached) {
+                try {
+                    const d = JSON.parse(cached);
+                    renderCard(charName,
+                        d.type || 'unknown', d.role || '', d.description || '',
+                        d.who || '', d.facts || [], d.alliedWith || [], d.opposedTo || [],
+                        d.appearances || []);
+                    showCardPanel('content');
+                    return;
+                } catch { /* fall through to AI call */ }
+            }
+
+            // Gather appearances for this character from chapters BEFORE current chapter
+            const maxChNum = activeChapterNum !== null ? activeChapterNum - 1 : 9999;
+            const appearances = [];
+            allChapters
+                .filter(ch => ch.num <= maxChNum)
+                .forEach(ch => {
+                    const found = (ch.characters || []).find(
+                        c => c.name.toLowerCase() === charName.toLowerCase() ||
+                             (c.group_name && c.group_name.toLowerCase() === charName.toLowerCase())
+                    );
+                    if (found) {
+                        appearances.push({
+                            chNum:    ch.num,
+                            status:   found.status,
+                            location: found.location_description || '',
+                            notes:    found.notes || ''
+                        });
+                    }
+                });
+
+            if (!appearances.length && maxChNum < 1) {
+                // First chapter — no prior history, but still ask AI using book knowledge
+                // Fall through to AI call with empty appearances
+            } else if (!appearances.length) {
+                // Hasn't appeared yet — still ask AI for who they are
+                // Fall through to AI call
+            }
+
+            // AI call
+            try {
+                const result = await callAI(buildCardPrompt(charName, appearances, maxChNum));
+                const type        = result.type        || 'unknown';
+                const role        = result.role        || '';
+                const description = result.description || '';
+                const who         = result.who         || '';
+                const facts       = Array.isArray(result.facts)       ? result.facts       : [];
+                const alliedWith  = Array.isArray(result.allied_with) ? result.allied_with : [];
+                const opposedTo   = Array.isArray(result.opposed_to)  ? result.opposed_to  : [];
+                const chNums      = appearances.map(a => a.chNum);
+
+                // Cache result
+                try {
+                    localStorage.setItem(cKey, JSON.stringify({
+                        type, role, description, who, facts, alliedWith, opposedTo, appearances: chNums
+                    }));
+                } catch { /* storage full — skip */ }
+
+                renderCard(charName, type, role, description, who, facts, alliedWith, opposedTo, chNums);
+                showCardPanel('content');
+
+            } catch (err) {
+                console.error('Character card AI error:', err);
+                document.getElementById('card-name').textContent = charName;
+                document.getElementById('card-role').textContent = '';
+                document.getElementById('card-description').textContent = '';
+                document.getElementById('card-who').textContent =
+                    'Could not load character summary: ' + err.message;
+                document.getElementById('card-facts').innerHTML = '';
+                document.getElementById('card-appearances').textContent = '';
+                showCardPanel('content');
+            }
+        }
+
+        function renderCard(name, type, role, description, who, facts, alliedWith, opposedTo, chNums) {
+            const colour = colourForName(name);
+
+            // Avatar — initials in character colour
+            const initials = name.split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+            const avatarEl = document.getElementById('card-avatar');
+            avatarEl.textContent = initials;
+            avatarEl.style.background = colour;
+            avatarEl.className = 'card-avatar' + (type === 'creature' ? ' creature' : '');
+
+            document.getElementById('card-name').textContent = name;
+            document.getElementById('card-role').textContent = role;
+
+            const descEl = document.getElementById('card-description');
+            if (description) {
+                descEl.textContent = description;
+                descEl.style.display = '';
+            } else {
+                descEl.style.display = 'none';
+            }
+
+            document.getElementById('card-who').textContent = who;
+
+            // Relationships
+            const relEl      = document.getElementById('card-relationships');
+            const relHeading = document.getElementById('card-rel-heading');
+            const hasRels    = (alliedWith && alliedWith.length) || (opposedTo && opposedTo.length);
+            if (hasRels) {
+                relHeading.style.display = '';
+                let relHtml = '';
+                if (alliedWith && alliedWith.length) {
+                    relHtml += `<div class="card-rel-row">
+                        <span class="card-rel-label">With</span>
+                        <span class="card-rel-names">${alliedWith.join(', ')}</span>
+                    </div>`;
+                }
+                if (opposedTo && opposedTo.length) {
+                    relHtml += `<div class="card-rel-row">
+                        <span class="card-rel-label">Against</span>
+                        <span class="card-rel-names">${opposedTo.join(', ')}</span>
+                    </div>`;
+                }
+                relEl.innerHTML = relHtml;
+            } else {
+                relHeading.style.display = 'none';
+                relEl.innerHTML = '';
+            }
+
+            // Facts
+            const factsEl = document.getElementById('card-facts');
+            factsEl.innerHTML = facts.length
+                ? facts.map(f => `<li>${f}</li>`).join('')
+                : '<li style="color:#888;font-style:italic;">No key events recorded yet.</li>';
+
+            // Appearances
+            const appEl = document.getElementById('card-appearances');
+            if (chNums && chNums.length) {
+                const labels = chNums.map(n => n === 0 ? 'Prologue' : `Ch ${n}`).join(', ');
+                appEl.textContent = `Previously seen in: ${labels}`;
+            } else {
+                appEl.textContent = '';
+            }
+        }
+
+        document.getElementById('card-close-btn').onclick = () => {
+            showCardPanel('placeholder');
+        };
+
+        // Initialise card panel
+        showCardPanel('placeholder');
+
+        window.addEventListener('load', () => { layoutViewport(); init(); });
+    </script>
+</body>
+</html>

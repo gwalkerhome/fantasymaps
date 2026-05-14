@@ -243,6 +243,17 @@
             <label><input type="radio" name="ai-model" value="openai"> OpenAI GPT-4o mini</label>
         </div>
 
+        <!-- Resume panel (shown when saved progress matches the selected file) -->
+        <div id="resume-panel" style="display:none; margin-bottom:12px; padding:14px 16px;
+             border:2px solid var(--moss-green); border-radius:5px;
+             background:rgba(106,153,78,0.08);">
+            <div id="resume-message" style="font-size:0.88em; margin-bottom:10px; color:var(--iron-ink);"></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="resume-btn" class="btn" style="font-size:0.85em;">↩ Resume from where I left off</button>
+                <button id="resume-discard-btn" class="btn secondary" style="font-size:0.85em;">Start fresh</button>
+            </div>
+        </div>
+
         <!-- Upload zone -->
         <div class="upload-zone" id="upload-zone">
             <span class="upload-icon">📖</span>
